@@ -4,33 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9631a45c-4840-4408-b85a-c1ec2abe4dfd" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/ADR-ISSUE-TRACKER.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/ADR-ISSUE-TRACKER.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/adr/0001-llm-provider.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0001-llm-provider.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/adr/0003-async-image-generation.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0003-async-image-generation.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/issues/0001-llm-provider.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/issues/0001-llm-provider.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/openapi.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docs/openapi.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/application/unit_of_work.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/application/unit_of_work.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/common.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/content.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/content.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/image_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/image_generation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/user.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/user.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/infrastructure/repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/infrastructure/dtos.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/infrastructure/unit_of_work.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/infrastructure/unit_of_work.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_api.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_relational_integrity.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_relational_integrity.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_repositories.py" afterDir="false" />
-    </list>
+    <list default="true" id="9631a45c-4840-4408-b85a-c1ec2abe4dfd" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -51,23 +25,23 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.0" />
-      <entry key="MS500" value="1.0" />
-      <entry key="S2" value="1.0" />
-      <entry key="S5" value="1.0" />
-      <entry key="S10" value="1.0" />
-      <entry key="S30" value="1.0000000000054723" />
-      <entry key="S60" value="1.000020507699084" />
-      <entry key="M2" value="1.0399197962057958" />
-      <entry key="M5" value="4.772198143796476" />
-      <entry key="M10" value="19.356283358216803" />
-      <entry key="M15" value="35.792642577536505" />
-      <entry key="M30" value="82.77715688903321" />
-      <entry key="H1" value="147.98562648355878" />
-      <entry key="H2" value="219.64493499466607" />
-      <entry key="H4" value="284.60627719821167" />
-      <entry key="D1" value="371.84153390046396" />
-      <entry key="W1" value="391.54492386046707" />
+      <entry key="MS100" value="1.0008704799889419" />
+      <entry key="MS500" value="1.351111875510171" />
+      <entry key="S2" value="4.711124182220916" />
+      <entry key="S5" value="15.783822947559026" />
+      <entry key="S10" value="32.33658120801244" />
+      <entry key="S30" value="66.40667485937904" />
+      <entry key="S60" value="83.86019550791899" />
+      <entry key="M2" value="95.23848473121456" />
+      <entry key="M5" value="103.17232519305374" />
+      <entry key="M10" value="106.05782930208467" />
+      <entry key="M15" value="107.47485401989871" />
+      <entry key="M30" value="117.46842122403082" />
+      <entry key="H1" value="158.55566812762044" />
+      <entry key="H2" value="236.49549576939532" />
+      <entry key="H4" value="325.92407804220284" />
+      <entry key="D1" value="464.4005962572429" />
+      <entry key="W1" value="498.02385843932933" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -89,23 +63,23 @@
       <entry key="W1" value="0.0" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="0.7269862586601552" />
-      <entry key="MS500" value="0.9382211965006712" />
-      <entry key="S2" value="0.9841840220338002" />
-      <entry key="S5" value="0.99364333555883" />
-      <entry key="S10" value="0.9968166007640673" />
-      <entry key="S30" value="0.9989377389277744" />
-      <entry key="S60" value="0.9994892235498494" />
-      <entry key="M2" value="1.039642913276987" />
-      <entry key="M5" value="4.771688808496445" />
-      <entry key="M10" value="19.355289095500968" />
-      <entry key="M15" value="35.79147724068462" />
-      <entry key="M30" value="82.7759417782574" />
-      <entry key="H1" value="147.98460270451076" />
-      <entry key="H2" value="219.64417680256497" />
-      <entry key="H4" value="284.60577588981835" />
-      <entry key="D1" value="371.8414211634551" />
-      <entry key="W1" value="391.54490678429556" />
+      <entry key="MS100" value="0.14876399828978967" />
+      <entry key="MS500" value="0.8630770375258761" />
+      <entry key="S2" value="4.278772753578092" />
+      <entry key="S5" value="15.518630686770793" />
+      <entry key="S10" value="32.17383129731432" />
+      <entry key="S30" value="66.31253357331488" />
+      <entry key="S60" value="83.79152777131976" />
+      <entry key="M2" value="95.19455396360088" />
+      <entry key="M5" value="103.15157482174914" />
+      <entry key="M10" value="106.04682921142754" />
+      <entry key="M15" value="107.4673599728845" />
+      <entry key="M30" value="117.46446753536198" />
+      <entry key="H1" value="158.55339528123642" />
+      <entry key="H2" value="236.49408667859575" />
+      <entry key="H4" value="325.92321044874404" />
+      <entry key="D1" value="464.40040744877246" />
+      <entry key="W1" value="498.0238298902743" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -117,23 +91,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "dev",
-    "ignore.virus.scanning.warn.message": "true",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.jshint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.jshint": "",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.jshint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.jshint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\Kelve\PycharmProjects\creator-backend-python\src\creator" />
@@ -181,7 +155,7 @@
       <option name="presentableId" value="Default" />
       <updated>1787833452726</updated>
       <workItem from="1787833453742" duration="617000" />
-      <workItem from="1787912195840" duration="8991000" />
+      <workItem from="1787912195840" duration="9292000" />
     </task>
     <servers />
   </component>
