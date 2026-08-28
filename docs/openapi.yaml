@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: Creator API
+  version: 0.1.0
+  description: Contract-first API for Creator.
+servers:
+  - url: http://localhost:8000
+paths:
+  /health/live:
+    get:
+      operationId: liveHealth
+      responses:
+        '200':
+          description: Process is alive.
+  /api/v1/content/generate:
+    post:
+      operationId: generateContent
+      responses:
+        '501': { $ref: '#/components/responses/NotImplemented' }
+  /api/v1/images/generate:
+    post:
+      operationId: generateImage
+      responses:
+        '501': { $ref: '#/components/responses/NotImplemented' }
+  /api/v1/images/{id}:
+    get:
+      operationId: getImage
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '501': { $ref: '#/components/responses/NotImplemented' }
+  /api/v1/content:
+    get:
+      operationId: listContent
+      responses:
+        '501': { $ref: '#/components/responses/NotImplemented' }
+  /api/v1/content/{id}:
+    delete:
+      operationId: deleteContent
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '501': { $ref: '#/components/responses/NotImplemented' }
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    NotImplemented:
+      description: Contract reserved for the next implementation issue.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [success, error, meta]
+      properties:
+        success: { const: false }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }

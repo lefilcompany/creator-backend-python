@@ -1,0 +1,44 @@
+services:
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "8000:8000"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+  worker:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    command: ["rq", "worker", "--url", "redis://redis:6379/0", "generations"]
+    depends_on:
+      redis: { condition: service_started }
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: creator
+      POSTGRES_USER: creator
+      POSTGRES_PASSWORD: creator
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creator -d creator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
