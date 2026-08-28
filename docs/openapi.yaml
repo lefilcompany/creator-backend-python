@@ -71,3 +71,178 @@ components:
           required: [request_id]
           properties:
             request_id: { type: string, format: uuid }
+    User:
+      type: object
+      required: [id, auth_subject, global_role, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        auth_subject: { type: string, maxLength: 255 }
+        email:
+          type: [string, 'null']
+          format: email
+          maxLength: 320
+        display_name:
+          type: [string, 'null']
+          maxLength: 255
+        global_role:
+          type: string
+          enum: [admin, gestor, membro]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    Settings:
+      type: object
+      required: [id, user_id, preferences, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        preferences:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Workspace:
+      type: object
+      required: [id, name, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 255 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    WorkspaceMembership:
+      type: object
+      required: [id, workspace_id, user_id, role, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        role:
+          type: string
+          enum: [owner, admin, editor, viewer]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    Content:
+      type: object
+      required: [id, workspace_id, type, payload, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        created_by_user_id:
+          type: [string, 'null']
+          format: uuid
+        type:
+          type: string
+          enum: [IMAGE]
+        title:
+          type: [string, 'null']
+          maxLength: 255
+        payload:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    Generation:
+      type: object
+      required: [id, workspace_id, content_id, type, model, prompt, parameters, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        requested_by_user_id:
+          type: [string, 'null']
+          format: uuid
+        type:
+          type: string
+          enum: [IMAGE]
+        model: { type: string, maxLength: 255 }
+        prompt: { type: string, minLength: 1, maxLength: 20000 }
+        parameters:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    GenerationJobStatus:
+      type: string
+      enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+    GenerationJob:
+      type: object
+      required: [id, workspace_id, generation_id, status, attempt_count, max_attempts, queued_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        generation_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        external_id:
+          type: [string, 'null']
+          maxLength: 255
+        attempt_count: { type: integer, minimum: 0 }
+        max_attempts: { type: integer, minimum: 1 }
+        failure_code:
+          type: [string, 'null']
+          maxLength: 100
+        failure_message:
+          type: [string, 'null']
+        queued_at: { type: string, format: date-time }
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+        failed_at:
+          type: [string, 'null']
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    GenerationJobStatusEvent:
+      type: object
+      required: [id, generation_job_id, status, occurred_at]
+      properties:
+        id: { type: string, format: uuid }
+        generation_job_id: { type: string, format: uuid }
+        previous_status:
+          anyOf:
+            - $ref: '#/components/schemas/GenerationJobStatus'
+            - type: 'null'
+        status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        occurred_at: { type: string, format: date-time }
+    Image:
+      type: object
+      required: [id, workspace_id, content_id, generation_id, version_number, storage_path, public_url, mime_type, width, height, model, prompt, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        generation_id: { type: string, format: uuid }
+        version_number: { type: integer, minimum: 1 }
+        storage_path: { type: string, maxLength: 1024 }
+        public_url: { type: string, format: uri, maxLength: 2048 }
+        mime_type:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        model: { type: string, maxLength: 255 }
+        prompt: { type: string, minLength: 1, maxLength: 20000 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
