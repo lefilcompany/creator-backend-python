@@ -3,7 +3,9 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
 
+from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings, get_settings
+from creator.infrastructure.unit_of_work import get_unit_of_work
 
 
 @dataclass(frozen=True)
@@ -27,3 +29,9 @@ def get_principal(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
     # JWT signature validation is intentionally isolated as ADR-004 work.
     return Principal(subject="unverified-token")
+
+
+def get_uow(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+) -> UnitOfWork:
+    return unit_of_work

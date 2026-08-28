@@ -13,6 +13,11 @@ from alembic.config import Config
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+
+from creator.domain.generation import GenerationJobStatus
+from creator.domain.repositories import GenerationHistoryFilters, ImageMetadata, PageRequest
+from creator.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TABLES = {
@@ -378,3 +383,168 @@ def test_concurrent_image_version_insert_allows_one_winner(migrated_engine: Engi
     assert not thread.is_alive()
     assert len(errors) == 1
     assert isinstance(errors[0], IntegrityError)
+
+
+def uow_for_engine(engine: Engine) -> SqlAlchemyUnitOfWork:
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    return SqlAlchemyUnitOfWork(factory)
+
+
+def test_repositories_create_and_update_user_settings(migrated_engine: Engine) -> None:
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        user = unit_of_work.users.add(
+            auth_subject=f"supabase:{uuid4()}",
+            email="repository-user@example.com",
+            display_name="Repository User",
+        )
+        settings = unit_of_work.settings.create_for_user(
+            user.id,
+            preferences={"theme": "light"},
+        )
+        unit_of_work.commit()
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        stored_user = unit_of_work.users.get_by_auth_subject(user.auth_subject)
+        updated_settings = unit_of_work.settings.update_preferences(
+            user.id,
+            {"theme": "dark"},
+        )
+        unit_of_work.commit()
+
+    assert stored_user == user
+    assert settings.preferences == {"theme": "light"}
+    assert updated_settings.preferences == {"theme": "dark"}
+
+
+def test_content_repository_scopes_pagination_by_user_membership(
+    migrated_engine: Engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        ids = seed_user_workspace_content(connection)
+        other_ids = seed_user_workspace_content(connection)
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        unit_of_work.contents.add(
+            workspace_id=ids["workspace_id"],
+            created_by_user_id=ids["user_id"],
+            title="Second visible content",
+        )
+        unit_of_work.contents.add(
+            workspace_id=other_ids["workspace_id"],
+            created_by_user_id=other_ids["user_id"],
+            title="Hidden content",
+        )
+        page = unit_of_work.contents.list_for_user(
+            user_id=ids["user_id"],
+            page=PageRequest(page=1, limit=1, sort="desc"),
+        )
+        unit_of_work.commit()
+
+    assert page.total == 2
+    assert len(page.items) == 1
+    assert page.items[0].workspace_id == ids["workspace_id"]
+
+
+def test_image_generation_repository_completes_job_and_lists_history(
+    migrated_engine: Engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        ids = seed_user_workspace_content(connection)
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        created = unit_of_work.image_generations.create_image_generation(
+            workspace_id=ids["workspace_id"],
+            content_id=ids["content_id"],
+            requested_by_user_id=ids["user_id"],
+            model="gemini-image",
+            prompt="Generate a campaign image",
+            external_id="provider-history-1",
+        )
+        claimed = unit_of_work.image_generations.claim_next_pending(
+            workspace_id=ids["workspace_id"]
+        )
+        assert claimed is not None
+        image = unit_of_work.image_generations.complete_job(
+            claimed.id,
+            ImageMetadata(
+                storage_path=f"{ids['workspace_id']}/{uuid4()}.png",
+                public_url=f"https://example.com/{uuid4()}.png",
+                mime_type="image/png",
+                width=1024,
+                height=768,
+                model="gemini-image",
+                prompt="Generate a campaign image",
+            ),
+        )
+        history = unit_of_work.image_generations.list_history_for_user(
+            user_id=ids["user_id"],
+            filters=GenerationHistoryFilters(status=GenerationJobStatus.COMPLETED),
+        )
+        unit_of_work.commit()
+
+    assert created.status == GenerationJobStatus.PENDING
+    assert claimed.status == GenerationJobStatus.PROCESSING
+    assert image.generation_id == created.generation_id
+    assert history.total == 1
+    assert history.items[0].status == GenerationJobStatus.COMPLETED
+
+
+def test_image_generation_claim_next_pending_is_atomic(
+    migrated_engine: Engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        ids = seed_user_workspace_content(connection)
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        created = unit_of_work.image_generations.create_image_generation(
+            workspace_id=ids["workspace_id"],
+            content_id=ids["content_id"],
+            requested_by_user_id=ids["user_id"],
+            model="gemini-image",
+            prompt="Generate a claim image",
+        )
+        unit_of_work.commit()
+
+    claims: list[object] = []
+    errors: list[BaseException] = []
+    first_claimed = threading.Event()
+    release_first = threading.Event()
+
+    def first_worker() -> None:
+        try:
+            with uow_for_engine(migrated_engine) as unit_of_work:
+                claim = unit_of_work.image_generations.claim_next_pending(
+                    workspace_id=ids["workspace_id"]
+                )
+                claims.append(claim)
+                first_claimed.set()
+                release_first.wait(timeout=5)
+                unit_of_work.commit()
+        except BaseException as error:
+            errors.append(error)
+
+    def second_worker() -> None:
+        try:
+            first_claimed.wait(timeout=5)
+            with uow_for_engine(migrated_engine) as unit_of_work:
+                claim = unit_of_work.image_generations.claim_next_pending(
+                    workspace_id=ids["workspace_id"]
+                )
+                claims.append(claim)
+                unit_of_work.commit()
+        except BaseException as error:
+            errors.append(error)
+
+    first_thread = threading.Thread(target=first_worker)
+    second_thread = threading.Thread(target=second_worker)
+    first_thread.start()
+    second_thread.start()
+    second_thread.join(timeout=5)
+    release_first.set()
+    first_thread.join(timeout=5)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+    assert {claim.id for claim in claims if claim is not None} == {created.id}
+    assert sum(claim is None for claim in claims) == 1
