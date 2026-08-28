@@ -16,7 +16,8 @@ from creator.domain.exceptions import (
     PersistenceError,
 )
 from creator.domain.generation import GenerationJobStatus, can_transition
-from creator.domain.repositories import (
+from creator.infrastructure import models
+from creator.repositories import (
     ContentFilters,
     ContentRecord,
     GenerationHistoryFilters,
@@ -29,7 +30,6 @@ from creator.domain.repositories import (
     SettingsRecord,
     UserRecord,
 )
-from creator.infrastructure import models
 
 
 def _now() -> datetime:

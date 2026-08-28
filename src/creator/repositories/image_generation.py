@@ -6,7 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from creator.domain.generation import GenerationJobStatus
-from creator.domain.repositories.common import JsonObject, Page, PageRequest
+from creator.repositories.common import JsonObject, Page, PageRequest
 
 
 @dataclass(frozen=True, slots=True)

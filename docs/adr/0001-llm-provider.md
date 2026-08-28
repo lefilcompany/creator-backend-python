@@ -10,7 +10,7 @@ Creator precisa gerar texto sem acoplar o domínio a um fornecedor.
 
 ## Decisão
 
-O domínio depende de `LLMProvider`; Gemini 2.5 Flash é o primeiro adapter. A seleção ocorre em uma factory e credenciais ficam fora do código.
+O domínio depende de provider interfaces; Gemini 2.5 Flash é o primeiro adapter de texto e Gemini Image é o primeiro adapter de imagem. A seleção ocorre em factories e credenciais ficam fora do código.
 
 ## Consequências
 
@@ -18,4 +18,4 @@ Trocar o vendor não exige alterar endpoints ou casos de uso. O adapter não con
 
 ## Issues vinculadas
 
-#3, #9, #11, #17, #19, #23 e #27. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
+#3, #9, #11, #13, #17, #19, #23 e #27. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).

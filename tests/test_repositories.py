@@ -14,19 +14,19 @@ from creator.domain.exceptions import (
     InvalidStateTransitionError,
 )
 from creator.domain.generation import GenerationJobStatus
-from creator.domain.repositories import (
-    ContentFilters,
-    GenerationHistoryFilters,
-    ImageMetadata,
-    PageRequest,
-)
 from creator.infrastructure import models
-from creator.infrastructure.repositories import (
+from creator.infrastructure.dtos import (
     SqlAlchemyContentRepository,
     SqlAlchemyImageGenerationRepository,
     SqlAlchemySettingsRepository,
     SqlAlchemyUserRepository,
     flush_or_raise,
+)
+from creator.repositories import (
+    ContentFilters,
+    GenerationHistoryFilters,
+    ImageMetadata,
+    PageRequest,
 )
 
 NOW = datetime(2026, 8, 28, tzinfo=UTC)

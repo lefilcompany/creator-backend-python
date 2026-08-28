@@ -6,6 +6,15 @@ info:
 servers:
   - url: http://localhost:8000
 paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: Application health status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
   /health/live:
     get:
       operationId: liveHealth
@@ -55,6 +64,21 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    HealthResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data:
+          type: object
+          required: [status]
+          properties:
+            status: { const: ok }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     ErrorResponse:
       type: object
       required: [success, error, meta]

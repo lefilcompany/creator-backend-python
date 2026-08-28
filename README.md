@@ -7,13 +7,35 @@ Fundação Python 3.12/FastAPI para o Creator, reconstruída a partir do ADR de 
 ```bash
 cp .env.example .env
 docker compose up --build
-curl http://localhost:8000/health/live
+curl http://localhost:8000/health
 ```
 
-Localmente, instale as dependências com `make install` e execute `make check`.
+Localmente, instale as dependências pinadas e inicie a aplicação:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e '.[dev]'
+uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+No Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Swagger fica disponível em `http://localhost:8000/docs`; ReDoc em `http://localhost:8000/redoc`.
+Execute a validação local com `ruff check src tests`, `ruff format --check src tests`, `mypy src` e `pytest`. Em ambientes com `make`, `make check` roda o mesmo conjunto.
 
 ## Arquitetura
 
+- `src/creator/main.py`: entrada executável FastAPI.
 - `src/creator/api`: transporte HTTP, contratos e respostas versionadas.
 - `src/creator/domain`: vocabulário e modelos de negócio independentes de vendors.
 - `src/creator/infrastructure`: banco, fila, autenticação e configurações.

@@ -1,6 +1,6 @@
-from creator.domain.repositories.common import JsonObject, Page, PageRequest, SortDirection
-from creator.domain.repositories.content import ContentFilters, ContentRecord, ContentRepository
-from creator.domain.repositories.image_generation import (
+from creator.repositories.common import JsonObject, Page, PageRequest, SortDirection
+from creator.repositories.content import ContentFilters, ContentRecord, ContentRepository
+from creator.repositories.image_generation import (
     GenerationHistoryFilters,
     GenerationJobRecord,
     GenerationJobStatusEventRecord,
@@ -8,8 +8,8 @@ from creator.domain.repositories.image_generation import (
     ImageMetadata,
     ImageRecord,
 )
-from creator.domain.repositories.settings import SettingsRecord, SettingsRepository
-from creator.domain.repositories.user import UserRecord, UserRepository
+from creator.repositories.settings import SettingsRecord, SettingsRepository
+from creator.repositories.user import UserRecord, UserRepository
 
 __all__ = [
     "ContentFilters",

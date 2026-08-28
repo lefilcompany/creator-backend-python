@@ -7,19 +7,19 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from creator.domain.exceptions import PersistenceError
-from creator.domain.repositories import (
-    ContentRepository,
-    ImageGenerationRepository,
-    SettingsRepository,
-    UserRepository,
-)
 from creator.infrastructure.db import SessionLocal
-from creator.infrastructure.repositories import (
+from creator.infrastructure.dtos import (
     SqlAlchemyContentRepository,
     SqlAlchemyImageGenerationRepository,
     SqlAlchemySettingsRepository,
     SqlAlchemyUserRepository,
     map_sqlalchemy_error,
+)
+from creator.repositories import (
+    ContentRepository,
+    ImageGenerationRepository,
+    SettingsRepository,
+    UserRepository,
 )
 
 SessionFactory = Callable[[], Session]

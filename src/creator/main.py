@@ -1,52 +1,105 @@
-from collections.abc import Awaitable, Callable
+from __future__ import annotations
+
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
-
-from creator.api.schemas import ErrorDetail, ErrorResponse, Meta, SuccessResponse
-
-app = FastAPI(title="Creator API", version="0.1.0", docs_url="/docs", redoc_url="/redoc")
+from fastapi.responses import JSONResponse
 
 
-@app.middleware("http")
-async def request_id_middleware(
-    request: Request, call_next: Callable[[Request], Awaitable[Response]]
-) -> Response:
-    request_id = UUID(request.headers.get("X-Request-ID", str(uuid4())))
-    request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = str(request_id)
-    return response
+def _request_id(request: Request | None = None) -> UUID:
+    if request is None:
+        return uuid4()
+    try:
+        return UUID(request.headers.get("X-Request-ID", ""))
+    except ValueError:
+        return uuid4()
 
 
-def error_response(request: Request, code: str, message: str, status_code: int) -> JSONResponse:
-    body = ErrorResponse(
-        error=ErrorDetail(code=code, message=message),
-        meta=Meta(request_id=request.state.request_id),
+def _json_response(payload: dict[str, Any], request_id: UUID, status_code: int) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=payload,
+        headers={"X-Request-ID": str(request_id)},
     )
-    return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"))
 
 
-@app.get("/health/live", response_model=SuccessResponse, tags=["health"])
-async def live_health(request: Request) -> SuccessResponse:
-    return SuccessResponse(data={"status": "ok"}, meta=Meta(request_id=request.state.request_id))
+def success_response(data: dict[str, Any], request: Request | None = None) -> JSONResponse:
+    request_id = _request_id(request)
+    return _json_response(
+        {"success": True, "data": data, "meta": {"request_id": str(request_id)}},
+        request_id,
+        200,
+    )
 
 
-async def not_implemented(request: Request) -> JSONResponse:
+def error_response(
+    code: str,
+    message: str,
+    *,
+    status_code: int,
+    request: Request | None = None,
+) -> JSONResponse:
+    request_id = _request_id(request)
+    return _json_response(
+        {
+            "success": False,
+            "error": {"code": code, "message": message},
+            "meta": {"request_id": str(request_id)},
+        },
+        request_id,
+        status_code,
+    )
+
+
+def not_implemented(request: Request) -> JSONResponse:
     return error_response(
-        request,
         "NOT_IMPLEMENTED",
-        "Endpoint reserved for the next implementation increment",
-        501,
+        "Endpoint reserved by contract.",
+        status_code=501,
+        request=request,
     )
 
 
-for method, path in [
-    ("post", "/api/v1/content/generate"),
-    ("post", "/api/v1/images/generate"),
-    ("get", "/api/v1/images/{id}"),
-    ("get", "/api/v1/content"),
-    ("delete", "/api/v1/content/{id}"),
-]:
-    app.add_api_route(path, not_implemented, methods=[method.upper()], include_in_schema=True)
+def create_app() -> FastAPI:
+    application = FastAPI(title="Creator API", version="0.1.0")
+
+    @application.get("/health")
+    async def health(request: Request) -> JSONResponse:
+        return success_response({"status": "ok"}, request)
+
+    @application.get("/health/live")
+    async def live_health(request: Request) -> JSONResponse:
+        return success_response({"status": "ok"}, request)
+
+    application.add_api_route(
+        "/api/v1/content/generate",
+        not_implemented,
+        methods=["POST"],
+    )
+    application.add_api_route(
+        "/api/v1/images/generate",
+        not_implemented,
+        methods=["POST"],
+    )
+    application.add_api_route(
+        "/api/v1/images/{id}",
+        not_implemented,
+        methods=["GET"],
+    )
+    application.add_api_route(
+        "/api/v1/content",
+        not_implemented,
+        methods=["GET"],
+    )
+    application.add_api_route(
+        "/api/v1/content/{id}",
+        not_implemented,
+        methods=["DELETE"],
+    )
+    return application
+
+
+app = create_app()
+
+__all__ = ["app", "create_app", "error_response", "not_implemented", "success_response"]

@@ -1,7 +1,7 @@
 from types import TracebackType
 from typing import Protocol, Self
 
-from creator.domain.repositories import (
+from creator.repositories import (
     ContentRepository,
     ImageGenerationRepository,
     SettingsRepository,

@@ -16,8 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from creator.domain.generation import GenerationJobStatus
-from creator.domain.repositories import GenerationHistoryFilters, ImageMetadata, PageRequest
 from creator.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from creator.repositories import GenerationHistoryFilters, ImageMetadata, PageRequest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TABLES = {

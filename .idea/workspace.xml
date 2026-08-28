@@ -5,12 +5,31 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9631a45c-4840-4408-b85a-c1ec2abe4dfd" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/ADR-ISSUE-TRACKER.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/ADR-ISSUE-TRACKER.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/adr/0005-postgresql-sqlalchemy-alembic.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0005-postgresql-sqlalchemy-alembic.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/issues/0005-postgresql-sqlalchemy-alembic.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/issues/0005-postgresql-sqlalchemy-alembic.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/api/dependencies.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/api/dependencies.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/adr/0001-llm-provider.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0001-llm-provider.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/adr/0003-async-image-generation.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0003-async-image-generation.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/issues/0001-llm-provider.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/issues/0001-llm-provider.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/openapi.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docs/openapi.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/application/unit_of_work.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/application/unit_of_work.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/content.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/content.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/image_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/image_generation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/domain/repositories/user.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/user.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/infrastructure/repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/infrastructure/dtos.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/infrastructure/unit_of_work.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/infrastructure/unit_of_work.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_api.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_relational_integrity.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_relational_integrity.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_repositories.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,23 +51,23 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.3333348658011546" />
-      <entry key="MS500" value="3.474917602404122" />
-      <entry key="S2" value="7.90383700838498" />
-      <entry key="S5" value="11.90283076914794" />
-      <entry key="S10" value="14.397893746700534" />
-      <entry key="S30" value="19.6764039195216" />
-      <entry key="S60" value="36.41348861272002" />
-      <entry key="M2" value="67.16162858365922" />
-      <entry key="M5" value="108.90899881199203" />
-      <entry key="M10" value="133.33848847743786" />
-      <entry key="M15" value="145.86589705249582" />
-      <entry key="M30" value="165.7477010300753" />
-      <entry key="H1" value="188.78292415803392" />
-      <entry key="H2" value="221.57989482709195" />
-      <entry key="H4" value="255.78091761283085" />
-      <entry key="D1" value="303.37940046656286" />
-      <entry key="W1" value="314.1201732710439" />
+      <entry key="MS100" value="1.0" />
+      <entry key="MS500" value="1.0" />
+      <entry key="S2" value="1.0" />
+      <entry key="S5" value="1.0" />
+      <entry key="S10" value="1.0" />
+      <entry key="S30" value="1.0000000000054723" />
+      <entry key="S60" value="1.000020507699084" />
+      <entry key="M2" value="1.0399197962057958" />
+      <entry key="M5" value="4.772198143796476" />
+      <entry key="M10" value="19.356283358216803" />
+      <entry key="M15" value="35.792642577536505" />
+      <entry key="M30" value="82.77715688903321" />
+      <entry key="H1" value="147.98562648355878" />
+      <entry key="H2" value="219.64493499466607" />
+      <entry key="H4" value="284.60627719821167" />
+      <entry key="D1" value="371.84153390046396" />
+      <entry key="W1" value="391.54492386046707" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -70,23 +89,23 @@
       <entry key="W1" value="0.0" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.2880218836258712" />
-      <entry key="MS500" value="3.453179541020545" />
-      <entry key="S2" value="7.891000292552193" />
-      <entry key="S5" value="11.89481556469624" />
-      <entry key="S10" value="14.392968759883109" />
-      <entry key="S30" value="19.67057796744779" />
-      <entry key="S60" value="36.403335771432914" />
-      <entry key="M2" value="67.15095898567219" />
-      <entry key="M5" value="108.90191907038763" />
-      <entry key="M10" value="133.33413114238564" />
-      <entry key="M15" value="145.8627116861144" />
-      <entry key="M30" value="165.7458803503992" />
-      <entry key="H1" value="188.78185115195365" />
-      <entry key="H2" value="221.57921932281405" />
-      <entry key="H4" value="255.78050285450882" />
-      <entry key="D1" value="303.3793130293474" />
-      <entry key="W1" value="314.12016018414283" />
+      <entry key="MS100" value="0.7269862586601552" />
+      <entry key="MS500" value="0.9382211965006712" />
+      <entry key="S2" value="0.9841840220338002" />
+      <entry key="S5" value="0.99364333555883" />
+      <entry key="S10" value="0.9968166007640673" />
+      <entry key="S30" value="0.9989377389277744" />
+      <entry key="S60" value="0.9994892235498494" />
+      <entry key="M2" value="1.039642913276987" />
+      <entry key="M5" value="4.771688808496445" />
+      <entry key="M10" value="19.355289095500968" />
+      <entry key="M15" value="35.79147724068462" />
+      <entry key="M30" value="82.7759417782574" />
+      <entry key="H1" value="147.98460270451076" />
+      <entry key="H2" value="219.64417680256497" />
+      <entry key="H4" value="284.60577588981835" />
+      <entry key="D1" value="371.8414211634551" />
+      <entry key="W1" value="391.54490678429556" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -107,12 +126,19 @@
     "git-widget-placeholder": "dev",
     "ignore.virus.scanning.warn.message": "true",
     "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.jshint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.jshint": "",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\Kelve\PycharmProjects\creator-backend-python\src\creator" />
+    </key>
+  </component>
   <component name="RunManager">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="creator-backend-python" />
@@ -155,7 +181,7 @@
       <option name="presentableId" value="Default" />
       <updated>1787833452726</updated>
       <workItem from="1787833453742" duration="617000" />
-      <workItem from="1787912195840" duration="5241000" />
+      <workItem from="1787912195840" duration="8991000" />
     </task>
     <servers />
   </component>

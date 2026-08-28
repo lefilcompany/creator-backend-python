@@ -8,25 +8,27 @@ version = "0.1.0"
 description = "Contract-first backend for Creator"
 requires-python = ">=3.12"
 dependencies = [
-  "fastapi>=0.115,<1",
-  "uvicorn[standard]>=0.34,<1",
-  "pydantic-settings>=2.6,<3",
-  "python-multipart>=0.0.20,<1",
-  "sqlalchemy>=2.0,<3",
-  "psycopg[binary]>=3.2,<4",
-  "alembic>=1.14,<2",
-  "redis>=5,<6",
-  "rq>=2,<3",
-  "PyJWT[crypto]>=2.10,<3",
+  "fastapi==0.141.1",
+  "uvicorn[standard]==0.52.4",
+  "pydantic-settings==2.15.0",
+  "python-multipart==0.0.32",
+  "sqlalchemy==2.0.52",
+  "psycopg[binary]==3.3.4",
+  "alembic==1.19.1",
+  "redis==5.3.1",
+  "rq==2.11.0",
+  "PyJWT[crypto]==2.13.0",
+  "google-genai==2.6.0",
+  "Pillow==12.1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28,<1",
-  "mypy>=1.14,<2",
-  "pytest>=8.3,<9",
-  "pytest-cov>=6,<7",
-  "ruff>=0.9,<1",
+  "httpx==0.28.1",
+  "mypy==1.20.2",
+  "pytest==8.4.2",
+  "pytest-cov==6.3.0",
+  "ruff==0.16.5",
 ]
 
 [tool.setuptools.packages.find]
