@@ -180,6 +180,26 @@ def job_row(generation: models.Generation, status: GenerationJobStatus) -> model
     )
 
 
+def image_row(generation: models.Generation) -> models.Image:
+    return models.Image(
+        id=uuid4(),
+        workspace_id=generation.workspace_id,
+        content_id=generation.content_id,
+        generation_id=generation.id,
+        version_number=1,
+        storage_path="users/principal/contents/content/versions/1/image.png",
+        public_url="https://example.com/image.png",
+        mime_type="image/png",
+        width=100,
+        height=100,
+        model="gemini-image",
+        prompt="Generate",
+        metadata_json={"source": "test"},
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
 def test_user_repository_crud_and_soft_delete_paths() -> None:
     session = FakeSession()
     repository = SqlAlchemyUserRepository(fake_session(session))
@@ -356,6 +376,24 @@ def test_image_generation_repository_scoped_history_queries() -> None:
 
     assert history.total == 1
     assert stored is not None
+
+
+def test_image_generation_repository_get_image_for_user_scopes_by_membership() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyImageGenerationRepository(fake_session(session))
+    content = content_row()
+    generation = generation_row(content)
+    image = image_row(generation)
+
+    session.scalars_results.append(ScalarResult(image))
+    stored = repository.get_image_for_user(
+        user_id=content.created_by_user_id,
+        image_id=image.id,
+    )
+
+    assert stored is not None
+    assert stored.id == image.id
+    assert stored.metadata == {"source": "test"}
 
 
 def test_invalid_generation_job_transition_is_rejected() -> None:

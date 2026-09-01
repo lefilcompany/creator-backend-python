@@ -30,7 +30,11 @@ class Settings(BaseSettings):
     gemini_retry_attempts: int = Field(default=3, ge=1)
     gemini_retry_initial_delay_seconds: float = Field(default=1.0, gt=0)
     gemini_retry_max_delay_seconds: float = Field(default=8.0, gt=0)
+    storage_provider: str = "local"
     storage_bucket: str = "creator-images"
+    storage_signed_url_expires_seconds: int = Field(default=3600, gt=0, le=604800)
+    storage_max_object_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    local_storage_root: str = ".data/storage"
 
 
 @lru_cache

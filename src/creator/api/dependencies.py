@@ -13,8 +13,10 @@ from creator.infrastructure.auth import (
     create_auth_client,
     create_auth_token_verifier,
 )
+from creator.infrastructure.storage import create_storage_provider
 from creator.infrastructure.unit_of_work import get_unit_of_work
 from creator.repositories import UserRecord
+from creator.services.storage.provider import StorageConfigurationError, StorageProvider
 
 
 def _auth_exception(
@@ -97,6 +99,19 @@ def get_auth_client(
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
 ) -> AuthClient:
     return create_auth_client(settings)
+
+
+def get_storage_provider(
+    settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
+) -> StorageProvider:
+    try:
+        return create_storage_provider(settings)
+    except StorageConfigurationError as error:
+        raise _auth_exception(
+            "STORAGE_MISCONFIGURED",
+            "Storage is not configured",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ) from error
 
 
 def _invalid_auth_exception() -> HTTPException:

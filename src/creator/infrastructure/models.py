@@ -490,6 +490,12 @@ class Image(Base):
     height: Mapped[int] = mapped_column(nullable=False)
     model: Mapped[str] = mapped_column(String(255), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     created_at: Mapped[object] = mapped_column(
         timestamp_tz,
         nullable=False,

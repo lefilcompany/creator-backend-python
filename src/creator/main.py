@@ -4,11 +4,17 @@ from collections.abc import Mapping
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 
-from creator.api.dependencies import get_auth_client, get_current_user
+from creator.api.dependencies import (
+    get_auth_client,
+    get_current_user,
+    get_storage_provider,
+    get_uow,
+)
 from creator.api.schemas import AuthLoginRequest, AuthSignupRequest
+from creator.application.unit_of_work import UnitOfWork
 from creator.domain.auth import AuthSession, AuthSignupResult
 from creator.infrastructure.auth import (
     AuthClient,
@@ -20,6 +26,8 @@ from creator.infrastructure.auth import (
     AuthTimeoutError,
     AuthUpstreamError,
 )
+from creator.repositories import ImageRecord, UserRecord
+from creator.services.storage.provider import StorageProvider, StorageUrlError
 
 
 def _request_id(request: Request | None = None) -> UUID:
@@ -113,6 +121,27 @@ def _auth_signup_data(result: AuthSignupResult) -> dict[str, Any]:
         "confirmation_required": result.confirmation_required,
         "provider": result.provider,
         "metadata": result.metadata,
+    }
+
+
+def _image_data(image: ImageRecord, *, public_url: str | None = None) -> dict[str, Any]:
+    return {
+        "id": str(image.id),
+        "workspace_id": str(image.workspace_id),
+        "content_id": str(image.content_id),
+        "generation_id": str(image.generation_id),
+        "version_number": image.version_number,
+        "storage_path": image.storage_path,
+        "public_url": public_url or image.public_url,
+        "mime_type": image.mime_type,
+        "width": image.width,
+        "height": image.height,
+        "model": image.model,
+        "prompt": image.prompt,
+        "metadata": image.metadata,
+        "created_at": image.created_at.isoformat(),
+        "updated_at": image.updated_at.isoformat(),
+        "deleted_at": image.deleted_at.isoformat() if image.deleted_at else None,
     }
 
 
@@ -281,12 +310,39 @@ def create_app() -> FastAPI:
         methods=["POST"],
         dependencies=api_dependencies,
     )
-    application.add_api_route(
-        "/api/v1/images/{id}",
-        not_implemented,
-        methods=["GET"],
-        dependencies=api_dependencies,
-    )
+
+    @application.get("/api/v1/images/{id}")
+    def get_image(
+        image_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        storage: Annotated[StorageProvider, Depends(get_storage_provider)],
+    ) -> JSONResponse:
+        image = unit_of_work.image_generations.get_image_for_user(
+            user_id=current_user.id,
+            image_id=image_id,
+        )
+        if image is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "IMAGE_NOT_FOUND",
+                    "message": "Image not found",
+                },
+            )
+        try:
+            public_url = storage.get_url(image.storage_path)
+        except StorageUrlError as error:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "STORAGE_URL_UNAVAILABLE",
+                    "message": "Stored image URL is unavailable",
+                },
+            ) from error
+        return success_response(_image_data(image, public_url=public_url), request)
+
     application.add_api_route(
         "/api/v1/content",
         not_implemented,

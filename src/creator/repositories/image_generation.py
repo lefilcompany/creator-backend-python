@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -54,6 +54,7 @@ class ImageRecord:
     height: int
     model: str
     prompt: str
+    metadata: JsonObject
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
@@ -68,6 +69,8 @@ class ImageMetadata:
     height: int
     model: str
     prompt: str
+    version_number: int | None = None
+    metadata: JsonObject = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +114,16 @@ class ImageGenerationRepository(Protocol):
     def claim_next_pending(
         self, *, workspace_id: UUID | None = None
     ) -> GenerationJobRecord | None: ...
+
+    def next_image_version(self, content_id: UUID) -> int: ...
+
+    def get_image_for_user(
+        self,
+        *,
+        user_id: UUID,
+        image_id: UUID,
+        include_deleted: bool = False,
+    ) -> ImageRecord | None: ...
 
     def complete_job(self, job_id: UUID, image: ImageMetadata) -> ImageRecord: ...
 

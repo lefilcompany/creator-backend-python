@@ -141,6 +141,7 @@ def _image_record(row: models.Image) -> ImageRecord:
         height=row.height,
         model=row.model,
         prompt=row.prompt,
+        metadata=_json(row.metadata_json),
         created_at=_datetime(row.created_at),
         updated_at=_datetime(row.updated_at),
         deleted_at=_optional_datetime(row.deleted_at),
@@ -508,12 +509,51 @@ class SqlAlchemyImageGenerationRepository:
         content_id = self._content_id_for_generation(job.generation_id)
         return _job_record(job, content_id)
 
+    def next_image_version(self, content_id: UUID) -> int:
+        return self._next_image_version(content_id)
+
+    def get_image_for_user(
+        self,
+        *,
+        user_id: UUID,
+        image_id: UUID,
+        include_deleted: bool = False,
+    ) -> ImageRecord | None:
+        statement = (
+            select(models.Image)
+            .join(
+                models.Content,
+                and_(
+                    models.Content.id == models.Image.content_id,
+                    models.Content.workspace_id == models.Image.workspace_id,
+                    models.Content.deleted_at.is_(None),
+                ),
+            )
+            .join(
+                models.WorkspaceMembership,
+                and_(
+                    models.WorkspaceMembership.workspace_id == models.Image.workspace_id,
+                    models.WorkspaceMembership.user_id == user_id,
+                    models.WorkspaceMembership.deleted_at.is_(None),
+                ),
+            )
+            .where(models.Image.id == image_id)
+        )
+        if not include_deleted:
+            statement = statement.where(models.Image.deleted_at.is_(None))
+        row = self._session.scalars(statement).one_or_none()
+        return _image_record(row) if row else None
+
     def complete_job(self, job_id: UUID, image: ImageMetadata) -> ImageRecord:
         job = self._locked_job(job_id)
         generation = self._generation_for_job(job)
         self._lock_content(generation.content_id)
         self._transition_job(job, GenerationJobStatus.COMPLETED)
-        version_number = self._next_image_version(generation.content_id)
+        version_number = (
+            image.version_number
+            if image.version_number is not None
+            else self._next_image_version(generation.content_id)
+        )
         timestamp = _now()
         job.completed_at = timestamp
         job.updated_at = timestamp
@@ -529,6 +569,7 @@ class SqlAlchemyImageGenerationRepository:
             height=image.height,
             model=image.model,
             prompt=image.prompt,
+            metadata_json=_json(image.metadata),
         )
         self._session.add(image_row)
         flush_or_raise(self._session)

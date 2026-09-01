@@ -65,9 +65,15 @@ paths:
       security:
         - SupabaseBearerAuth: []
       responses:
+        '200':
+          description: Image found for the authenticated user with a fresh usable URL.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '502': { $ref: '#/components/responses/StorageUrlUnavailable' }
   /api/v1/images/generate:
     post:
       operationId: generateImage
@@ -154,6 +160,16 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     AuthMisconfigured:
       description: Authentication is required but Supabase JWT verification is not configured.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: The requested resource does not exist or is not visible to the authenticated user.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    StorageUrlUnavailable:
+      description: The stored object exists but a usable URL could not be issued.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -419,7 +435,7 @@ components:
         occurred_at: { type: string, format: date-time }
     Image:
       type: object
-      required: [id, workspace_id, content_id, generation_id, version_number, storage_path, public_url, mime_type, width, height, model, prompt, created_at, updated_at]
+      required: [id, workspace_id, content_id, generation_id, version_number, storage_path, public_url, mime_type, width, height, model, prompt, metadata, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
@@ -435,8 +451,22 @@ components:
         height: { type: integer, minimum: 1 }
         model: { type: string, maxLength: 255 }
         prompt: { type: string, minLength: 1, maxLength: 20000 }
+        metadata:
+          type: object
+          additionalProperties: true
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         deleted_at:
           type: [string, 'null']
           format: date-time
+    ImageResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/Image' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }

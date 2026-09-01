@@ -7,13 +7,18 @@
     <list default="true" id="9631a45c-4840-4408-b85a-c1ec2abe4dfd" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/adr/0002-image-storage.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0002-image-storage.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/issues/0002-image-storage.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/issues/0002-image-storage.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/openapi.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docs/openapi.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/creator/api/dependencies.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/api/dependencies.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/creator/api/schemas.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/api/schemas.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/creator/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/infrastructure/dtos.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/infrastructure/dtos.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/infrastructure/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/infrastructure/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/creator/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/repositories/image_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/repositories/image_generation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/creator/services/storage/provider.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/creator/services/storage/provider.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_api.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_foundation.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_foundation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_repositories.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,23 +40,23 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.0004042854987436" />
-      <entry key="MS500" value="1.5407094142628392" />
-      <entry key="S2" value="6.139532399212353" />
-      <entry key="S5" value="12.33932885850586" />
-      <entry key="S10" value="16.302238443084313" />
-      <entry key="S30" value="20.196652266467293" />
-      <entry key="S60" value="28.66488428349627" />
-      <entry key="M2" value="60.19285924162397" />
-      <entry key="M5" value="124.59033592029685" />
-      <entry key="M10" value="164.5185627938216" />
-      <entry key="M15" value="181.37979934939963" />
-      <entry key="M30" value="207.9283613056857" />
-      <entry key="H1" value="256.8534474837413" />
-      <entry key="H2" value="338.98102490211414" />
-      <entry key="H4" value="431.437391965066" />
-      <entry key="D1" value="574.1693061230753" />
-      <entry key="W1" value="608.8369673240114" />
+      <entry key="MS100" value="1.0" />
+      <entry key="MS500" value="1.0" />
+      <entry key="S2" value="1.0" />
+      <entry key="S5" value="1.0" />
+      <entry key="S10" value="1.0" />
+      <entry key="S30" value="1.000000000011067" />
+      <entry key="S60" value="1.0000343291747922" />
+      <entry key="M2" value="1.0755955364414775" />
+      <entry key="M5" value="10.91338149252517" />
+      <entry key="M10" value="54.66589165118778" />
+      <entry key="M15" value="96.04237051332004" />
+      <entry key="M30" value="174.55052364228607" />
+      <entry key="H1" value="262.4497371389901" />
+      <entry key="H2" value="370.0606733843425" />
+      <entry key="H4" value="480.97462362986784" />
+      <entry key="D1" value="648.2770404274228" />
+      <entry key="W1" value="688.7952926932614" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -73,23 +78,23 @@
       <entry key="W1" value="0.0" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="0.1469698004702413" />
-      <entry key="MS500" value="1.148521272146338" />
-      <entry key="S2" value="5.924051654775178" />
-      <entry key="S5" value="12.226296466116835" />
-      <entry key="S10" value="16.239540836685457" />
-      <entry key="S30" value="20.1737788241915" />
-      <entry key="S60" value="28.64883904830437" />
-      <entry key="M2" value="60.17449382368092" />
-      <entry key="M5" value="124.57350559878164" />
-      <entry key="M10" value="164.50701364618462" />
-      <entry key="M15" value="181.37120316631905" />
-      <entry key="M30" value="207.92344401672062" />
-      <entry key="H1" value="256.8505859511043" />
-      <entry key="H2" value="338.97929304765177" />
-      <entry key="H4" value="431.4363542702722" />
-      <entry key="D1" value="574.1690872262776" />
-      <entry key="W1" value="608.8369344196477" />
+      <entry key="MS100" value="0.08838834764831845" />
+      <entry key="MS500" value="0.6155722066724582" />
+      <entry key="S2" value="0.8857675191023606" />
+      <entry key="S5" value="0.9526379980439373" />
+      <entry key="S10" value="0.9760317607762247" />
+      <entry key="S30" value="0.991945892440735" />
+      <entry key="S60" value="0.9959991190379911" />
+      <entry key="M2" value="1.0735583097684505" />
+      <entry key="M5" value="10.911490474437976" />
+      <entry key="M10" value="54.66234560900362" />
+      <entry key="M15" value="96.03830259697772" />
+      <entry key="M30" value="174.54686485016452" />
+      <entry key="H1" value="262.4470870699227" />
+      <entry key="H2" value="370.0589086365614" />
+      <entry key="H4" value="480.97352336967873" />
+      <entry key="D1" value="648.2768017722062" />
+      <entry key="W1" value="688.7952566613683" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -168,6 +173,7 @@
       <workItem from="1787912195840" duration="9292000" />
       <workItem from="1787935247931" duration="300000" />
       <workItem from="1788170829418" duration="3155000" />
+      <workItem from="1788260748531" duration="1794000" />
     </task>
     <servers />
   </component>

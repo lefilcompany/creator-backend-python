@@ -5,12 +5,18 @@ import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from creator.api.dependencies import get_auth_client, get_current_user
+from creator.api.dependencies import (
+    get_auth_client,
+    get_current_user,
+    get_storage_provider,
+    get_uow,
+)
 from creator.config import Settings, get_settings
 from creator.domain.auth import AuthSession, AuthSignupResult, Principal
 from creator.infrastructure.auth import AuthLoginRejectedError, AuthSignupRejectedError
 from creator.main import app, create_app
-from creator.repositories import UserRecord
+from creator.repositories import ImageRecord, UserRecord
+from creator.services.storage.provider import StorageUrlError
 
 JWT_SECRET = "test-supabase-jwt-secret-with-32-bytes"
 SUPABASE_URL = "https://creator-test.supabase.co"
@@ -85,6 +91,60 @@ class FakeAuthClient:
             provider="supabase",
             metadata={"aud": "authenticated"},
         )
+
+
+class FakeImageRepository:
+    def __init__(self, image: ImageRecord | None) -> None:
+        self.image = image
+        self.requests: list[dict[str, UUID]] = []
+
+    def get_image_for_user(self, *, user_id: UUID, image_id: UUID) -> ImageRecord | None:
+        self.requests.append({"user_id": user_id, "image_id": image_id})
+        return self.image
+
+
+class FakeUnitOfWork:
+    def __init__(self, image: ImageRecord | None) -> None:
+        self.image_generations = FakeImageRepository(image)
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        return None
+
+
+class FakeStorageProvider:
+    def __init__(self, *, url_error: bool = False) -> None:
+        self.url_error = url_error
+        self.paths: list[str] = []
+
+    def get_url(self, path: str) -> str:
+        self.paths.append(path)
+        if self.url_error:
+            raise StorageUrlError("unavailable")
+        return f"https://signed.example/{path}"
+
+
+def stored_image(image_id: UUID) -> ImageRecord:
+    return ImageRecord(
+        id=image_id,
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        content_id=UUID("20000000-0000-0000-0000-000000000001"),
+        generation_id=UUID("30000000-0000-0000-0000-000000000001"),
+        version_number=1,
+        storage_path="users/principal-123/contents/content/versions/1/image.png",
+        public_url="https://expired.example/image.png",
+        mime_type="image/png",
+        width=512,
+        height=512,
+        model="gemini-image",
+        prompt="Generate",
+        metadata={"storage_provider": "local"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
 
 
 def supabase_access_token() -> str:
@@ -264,6 +324,74 @@ async def test_api_v1_route_accepts_valid_supabase_token_when_enabled() -> None:
 
     assert response.status_code == 501
     assert response.json()["error"]["code"] == "NOT_IMPLEMENTED"
+
+
+@pytest.mark.anyio
+async def test_get_image_returns_authorized_image_with_fresh_storage_url() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    unit_of_work = FakeUnitOfWork(image)
+    storage = FakeStorageProvider()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_storage_provider] = lambda: storage
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/images/{image_id}")
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert response.json()["data"]["public_url"] == (
+        "https://signed.example/users/principal-123/contents/content/versions/1/image.png"
+    )
+    assert response.json()["data"]["metadata"] == {"storage_provider": "local"}
+    assert storage.paths == [image.storage_path]
+    assert unit_of_work.image_generations.requests == [
+        {
+            "user_id": UUID("00000000-0000-0000-0000-000000000001"),
+            "image_id": image_id,
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_get_image_returns_not_found_without_calling_storage_when_not_visible() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork(None)
+    storage = FakeStorageProvider()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_storage_provider] = lambda: storage
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/images/{image_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "IMAGE_NOT_FOUND"
+    assert storage.paths == []
+
+
+@pytest.mark.anyio
+async def test_get_image_returns_storage_error_when_signed_url_is_unavailable() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork(image)
+    application.dependency_overrides[get_storage_provider] = lambda: FakeStorageProvider(
+        url_error=True
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/images/{image_id}")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "STORAGE_URL_UNAVAILABLE"
 
 
 @pytest.mark.anyio
