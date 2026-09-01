@@ -119,7 +119,7 @@ def fake_session(session: FakeSession) -> Session:
 def user_row() -> models.User:
     return models.User(
         id=uuid4(),
-        auth_subject=f"supabase:{uuid4()}",
+        external_id=f"supabase:{uuid4()}",
         email="user@example.com",
         display_name="User",
         global_role=models.GlobalRole.MEMBRO,
@@ -184,12 +184,12 @@ def test_user_repository_crud_and_soft_delete_paths() -> None:
     session = FakeSession()
     repository = SqlAlchemyUserRepository(fake_session(session))
 
-    created = repository.add(auth_subject="supabase:new", email="new@example.com")
-    assert created.auth_subject == "supabase:new"
+    created = repository.add(external_id="supabase:new", email="new@example.com")
+    assert created.external_id == "supabase:new"
 
     stored = user_row()
     session.scalars_results.append(ScalarResult(stored))
-    assert repository.get_by_auth_subject(stored.auth_subject) is not None
+    assert repository.get_by_external_id(stored.external_id) is not None
 
     session.get_results.append(stored)
     updated = repository.update_profile(stored.id, display_name="Updated")

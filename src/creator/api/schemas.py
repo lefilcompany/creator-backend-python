@@ -25,6 +25,16 @@ class ErrorResponse(BaseModel):
     meta: Meta
 
 
+class AuthLoginRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=4096, repr=False)
+
+
+class AuthSignupRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=4096, repr=False)
+
+
 class GenerateTextRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=20_000)
     temperature: float = Field(default=0.7, ge=0, le=2)

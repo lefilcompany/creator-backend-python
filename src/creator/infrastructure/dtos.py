@@ -71,7 +71,7 @@ def flush_or_raise(session: Session) -> None:
 def _user_record(row: models.User) -> UserRecord:
     return UserRecord(
         id=row.id,
-        auth_subject=row.auth_subject,
+        external_id=row.external_id,
         email=row.email,
         display_name=row.display_name,
         global_role=_enum_value(row.global_role),
@@ -154,13 +154,13 @@ class SqlAlchemyUserRepository:
     def add(
         self,
         *,
-        auth_subject: str,
+        external_id: str,
         email: str | None = None,
         display_name: str | None = None,
         global_role: str = "membro",
     ) -> UserRecord:
         row = models.User(
-            auth_subject=auth_subject,
+            external_id=external_id,
             email=email,
             display_name=display_name,
             global_role=global_role,
@@ -176,10 +176,10 @@ class SqlAlchemyUserRepository:
         row = self._session.scalars(statement).one_or_none()
         return _user_record(row) if row else None
 
-    def get_by_auth_subject(
-        self, auth_subject: str, *, include_deleted: bool = False
+    def get_by_external_id(
+        self, external_id: str, *, include_deleted: bool = False
     ) -> UserRecord | None:
-        statement = select(models.User).where(models.User.auth_subject == auth_subject)
+        statement = select(models.User).where(models.User.external_id == external_id)
         if not include_deleted:
             statement = statement.where(models.User.deleted_at.is_(None))
         row = self._session.scalars(statement).one_or_none()

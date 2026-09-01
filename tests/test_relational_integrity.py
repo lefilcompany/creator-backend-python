@@ -81,13 +81,13 @@ def seed_user_workspace_content(connection: Any) -> dict[str, Any]:
     user_id = connection.execute(
         text(
             """
-            INSERT INTO users (auth_subject, email, display_name)
-            VALUES (:auth_subject, :email, :display_name)
+            INSERT INTO users (external_id, email, display_name)
+            VALUES (:external_id, :email, :display_name)
             RETURNING id
             """
         ),
         {
-            "auth_subject": f"supabase:{suffix}",
+            "external_id": f"supabase:{suffix}",
             "email": f"{suffix}@example.com",
             "display_name": "Creator Test User",
         },
@@ -393,7 +393,7 @@ def uow_for_engine(engine: Engine) -> SqlAlchemyUnitOfWork:
 def test_repositories_create_and_update_user_settings(migrated_engine: Engine) -> None:
     with uow_for_engine(migrated_engine) as unit_of_work:
         user = unit_of_work.users.add(
-            auth_subject=f"supabase:{uuid4()}",
+            external_id=f"supabase:{uuid4()}",
             email="repository-user@example.com",
             display_name="Repository User",
         )
@@ -404,7 +404,7 @@ def test_repositories_create_and_update_user_settings(migrated_engine: Engine) -
         unit_of_work.commit()
 
     with uow_for_engine(migrated_engine) as unit_of_work:
-        stored_user = unit_of_work.users.get_by_auth_subject(user.auth_subject)
+        stored_user = unit_of_work.users.get_by_external_id(user.external_id)
         updated_settings = unit_of_work.settings.update_preferences(
             user.id,
             {"theme": "dark"},

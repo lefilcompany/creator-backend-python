@@ -49,6 +49,7 @@ def test_generation_job_status_enum_reuses_domain_values() -> None:
 
 
 def test_settings_and_image_uniqueness_constraints_are_explicit() -> None:
+    assert "uq_users_external_id" in constraint_names("users", UniqueConstraint)
     assert "uq_settings_user_id" in constraint_names("settings", UniqueConstraint)
     assert "uq_images_generation_id" in constraint_names("images", UniqueConstraint)
     assert "uq_images_storage_path" in constraint_names("images", UniqueConstraint)

@@ -9,7 +9,7 @@ from uuid import UUID
 @dataclass(frozen=True, slots=True)
 class UserRecord:
     id: UUID
-    auth_subject: str
+    external_id: str
     email: str | None
     display_name: str | None
     global_role: str
@@ -22,7 +22,7 @@ class UserRepository(Protocol):
     def add(
         self,
         *,
-        auth_subject: str,
+        external_id: str,
         email: str | None = None,
         display_name: str | None = None,
         global_role: str = "membro",
@@ -30,8 +30,8 @@ class UserRepository(Protocol):
 
     def get_by_id(self, user_id: UUID, *, include_deleted: bool = False) -> UserRecord | None: ...
 
-    def get_by_auth_subject(
-        self, auth_subject: str, *, include_deleted: bool = False
+    def get_by_external_id(
+        self, external_id: str, *, include_deleted: bool = False
     ) -> UserRecord | None: ...
 
     def update_profile(

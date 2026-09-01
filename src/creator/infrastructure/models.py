@@ -92,7 +92,7 @@ generation_job_status_enum = SQLEnum(
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-        UniqueConstraint("auth_subject", name="uq_users_auth_subject"),
+        UniqueConstraint("external_id", name="uq_users_external_id"),
         UniqueConstraint("email", name="uq_users_email"),
         Index("ix_users_deleted_at", "deleted_at"),
     )
@@ -100,7 +100,7 @@ class User(Base):
     id: Mapped[UUID] = mapped_column(
         uuid_pk, primary_key=True, server_default=text("gen_random_uuid()")
     )
-    auth_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str | None] = mapped_column(String(320))
     display_name: Mapped[str | None] = mapped_column(String(255))
     global_role: Mapped[GlobalRole] = mapped_column(
