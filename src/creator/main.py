@@ -4,18 +4,29 @@ from collections.abc import Mapping
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Path, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from creator.api.dependencies import (
     get_auth_client,
     get_current_user,
+    get_generation_queue,
     get_storage_provider,
     get_uow,
 )
-from creator.api.schemas import AuthLoginRequest, AuthSignupRequest
+from creator.api.schemas import AuthLoginRequest, AuthSignupRequest, GenerateImageRequest
+from creator.application.image_generation import (
+    GenerationQueue,
+    IdempotencyConflictError,
+    QueueEnqueueError,
+    submit_image_generation,
+)
 from creator.application.unit_of_work import UnitOfWork
+from creator.config import Settings, get_settings
 from creator.domain.auth import AuthSession, AuthSignupResult
+from creator.domain.exceptions import EntityNotFoundError
+from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.auth import (
     AuthClient,
     AuthConfigurationError,
@@ -26,7 +37,7 @@ from creator.infrastructure.auth import (
     AuthTimeoutError,
     AuthUpstreamError,
 )
-from creator.repositories import ImageRecord, UserRecord
+from creator.repositories import ImageGenerationStatusRecord, ImageRecord, UserRecord
 from creator.services.storage.provider import StorageProvider, StorageUrlError
 
 
@@ -55,12 +66,17 @@ def _json_response(
     )
 
 
-def success_response(data: dict[str, Any], request: Request | None = None) -> JSONResponse:
+def success_response(
+    data: dict[str, Any],
+    request: Request | None = None,
+    *,
+    status_code: int = 200,
+) -> JSONResponse:
     request_id = _request_id(request)
     return _json_response(
         {"success": True, "data": data, "meta": {"request_id": str(request_id)}},
         request_id,
-        200,
+        status_code,
     )
 
 
@@ -145,6 +161,28 @@ def _image_data(image: ImageRecord, *, public_url: str | None = None) -> dict[st
     }
 
 
+def _image_generation_status_data(
+    status: ImageGenerationStatusRecord,
+    *,
+    public_url: str | None = None,
+) -> dict[str, Any]:
+    job = status.job
+    return {
+        "id": str(job.id),
+        "content_id": str(job.content_id),
+        "generation_id": str(job.generation_id),
+        "status": job.status.value,
+        "queued_at": job.queued_at.isoformat(),
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "failed_at": job.failed_at.isoformat() if job.failed_at else None,
+        "created_at": job.created_at.isoformat(),
+        "updated_at": job.updated_at.isoformat(),
+        "failure_code": job.failure_code,
+        "image": _image_data(status.image, public_url=public_url) if status.image else None,
+    }
+
+
 def create_app() -> FastAPI:
     application = FastAPI(title="Creator API", version="0.1.0")
 
@@ -163,6 +201,17 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             request=request,
             headers=exc.headers,
+        )
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        return error_response(
+            "VALIDATION_FAILED",
+            "Request validation failed",
+            status_code=422,
+            request=request,
         )
 
     @application.get("/health")
@@ -304,35 +353,76 @@ def create_app() -> FastAPI:
         methods=["POST"],
         dependencies=api_dependencies,
     )
-    application.add_api_route(
-        "/api/v1/images/generate",
-        not_implemented,
-        methods=["POST"],
-        dependencies=api_dependencies,
-    )
+    @application.post("/api/v1/images/generate")
+    def generate_image(
+        payload: GenerateImageRequest,
+        request: Request,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=128)
+        ],
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        queue: Annotated[GenerationQueue, Depends(get_generation_queue)],
+    ) -> JSONResponse:
+        try:
+            status = submit_image_generation(
+                unit_of_work=unit_of_work,
+                queue=queue,
+                settings=settings,
+                user=current_user,
+                content_id=payload.content_id,
+                style=payload.style,
+                idempotency_key=idempotency_key,
+            )
+        except EntityNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "CONTENT_NOT_FOUND", "message": "Content not found"},
+            ) from error
+        except IdempotencyConflictError as error:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Idempotency key was reused with a different request",
+                },
+            ) from error
+        except QueueEnqueueError as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "QUEUE_ENQUEUE_FAILED",
+                    "message": "Image generation could not be queued",
+                },
+            ) from error
+
+        return success_response(_image_generation_status_data(status), request, status_code=202)
 
     @application.get("/api/v1/images/{id}")
     def get_image(
-        image_id: Annotated[UUID, Path(alias="id")],
+        job_id: Annotated[UUID, Path(alias="id")],
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
         storage: Annotated[StorageProvider, Depends(get_storage_provider)],
     ) -> JSONResponse:
-        image = unit_of_work.image_generations.get_image_for_user(
+        status = unit_of_work.image_generations.get_status_for_user(
             user_id=current_user.id,
-            image_id=image_id,
+            job_id=job_id,
         )
-        if image is None:
+        if status is None:
             raise HTTPException(
                 status_code=404,
                 detail={
-                    "code": "IMAGE_NOT_FOUND",
-                    "message": "Image not found",
+                    "code": "IMAGE_GENERATION_NOT_FOUND",
+                    "message": "Image Generation Job not found",
                 },
             )
+        public_url = None
         try:
-            public_url = storage.get_url(image.storage_path)
+            if status.job.status == GenerationJobStatus.COMPLETED and status.image is not None:
+                public_url = storage.get_url(status.image.storage_path)
         except StorageUrlError as error:
             raise HTTPException(
                 status_code=502,
@@ -341,7 +431,10 @@ def create_app() -> FastAPI:
                     "message": "Stored image URL is unavailable",
                 },
             ) from error
-        return success_response(_image_data(image, public_url=public_url), request)
+        return success_response(
+            _image_generation_status_data(status, public_url=public_url),
+            request,
+        )
 
     application.add_api_route(
         "/api/v1/content",

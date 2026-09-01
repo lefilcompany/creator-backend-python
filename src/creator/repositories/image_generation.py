@@ -7,6 +7,7 @@ from uuid import UUID
 
 from creator.domain.generation import GenerationJobStatus
 from creator.repositories.common import JsonObject, Page, PageRequest
+from creator.repositories.user import UserRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +83,22 @@ class GenerationJobStatusEventRecord:
     occurred_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ImageGenerationStatusRecord:
+    job: GenerationJobRecord
+    parameters: JsonObject
+    image: ImageRecord | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ImageGenerationWorkItem:
+    job: GenerationJobRecord
+    model: str
+    prompt: str
+    parameters: JsonObject
+    requested_by_user: UserRecord
+
+
 class ImageGenerationRepository(Protocol):
     def create_image_generation(
         self,
@@ -116,6 +133,24 @@ class ImageGenerationRepository(Protocol):
     ) -> GenerationJobRecord | None: ...
 
     def next_image_version(self, content_id: UUID) -> int: ...
+
+    def get_status_for_user(
+        self,
+        *,
+        user_id: UUID,
+        job_id: UUID,
+        include_deleted: bool = False,
+    ) -> ImageGenerationStatusRecord | None: ...
+
+    def get_status_by_external_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        external_id: str,
+        include_deleted: bool = False,
+    ) -> ImageGenerationStatusRecord | None: ...
+
+    def claim_pending_by_id(self, job_id: UUID) -> ImageGenerationWorkItem | None: ...
 
     def get_image_for_user(
         self,

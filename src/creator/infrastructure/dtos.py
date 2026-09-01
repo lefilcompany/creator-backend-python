@@ -22,6 +22,8 @@ from creator.repositories import (
     ContentRecord,
     GenerationHistoryFilters,
     GenerationJobRecord,
+    ImageGenerationStatusRecord,
+    ImageGenerationWorkItem,
     ImageMetadata,
     ImageRecord,
     JsonObject,
@@ -145,6 +147,19 @@ def _image_record(row: models.Image) -> ImageRecord:
         created_at=_datetime(row.created_at),
         updated_at=_datetime(row.updated_at),
         deleted_at=_optional_datetime(row.deleted_at),
+    )
+
+
+def _image_generation_status_record(
+    job: models.GenerationJob,
+    content_id: UUID,
+    parameters: dict[str, object] | None,
+    image: models.Image | None,
+) -> ImageGenerationStatusRecord:
+    return ImageGenerationStatusRecord(
+        job=_job_record(job, content_id),
+        parameters=_json(parameters),
+        image=_image_record(image) if image else None,
     )
 
 
@@ -512,6 +527,83 @@ class SqlAlchemyImageGenerationRepository:
     def next_image_version(self, content_id: UUID) -> int:
         return self._next_image_version(content_id)
 
+    def get_status_for_user(
+        self,
+        *,
+        user_id: UUID,
+        job_id: UUID,
+        include_deleted: bool = False,
+    ) -> ImageGenerationStatusRecord | None:
+        statement = self._scoped_status_select(user_id).where(models.GenerationJob.id == job_id)
+        if not include_deleted:
+            statement = statement.where(models.GenerationJob.deleted_at.is_(None))
+        row = self._session.execute(statement).one_or_none()
+        if row is None:
+            return None
+        job, content_id, parameters, image = row
+        return _image_generation_status_record(job, content_id, parameters, image)
+
+    def get_status_by_external_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        external_id: str,
+        include_deleted: bool = False,
+    ) -> ImageGenerationStatusRecord | None:
+        statement = self._scoped_status_select(user_id).where(
+            models.GenerationJob.external_id == external_id
+        )
+        if not include_deleted:
+            statement = statement.where(models.GenerationJob.deleted_at.is_(None))
+        row = self._session.execute(statement).one_or_none()
+        if row is None:
+            return None
+        job, content_id, parameters, image = row
+        return _image_generation_status_record(job, content_id, parameters, image)
+
+    def claim_pending_by_id(self, job_id: UUID) -> ImageGenerationWorkItem | None:
+        statement = (
+            select(models.GenerationJob, models.Generation, models.User)
+            .join(
+                models.Generation,
+                and_(
+                    models.Generation.id == models.GenerationJob.generation_id,
+                    models.Generation.workspace_id == models.GenerationJob.workspace_id,
+                    models.Generation.deleted_at.is_(None),
+                ),
+            )
+            .join(
+                models.User,
+                and_(
+                    models.User.id == models.Generation.requested_by_user_id,
+                    models.User.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                models.GenerationJob.id == job_id,
+                models.GenerationJob.status == GenerationJobStatus.PENDING,
+                models.GenerationJob.deleted_at.is_(None),
+            )
+            .with_for_update(of=models.GenerationJob)
+        )
+        row = self._session.execute(statement).one_or_none()
+        if row is None:
+            return None
+        job, generation, user = row
+        self._transition_job(job, GenerationJobStatus.PROCESSING)
+        timestamp = _now()
+        job.started_at = timestamp
+        job.attempt_count += 1
+        job.updated_at = timestamp
+        flush_or_raise(self._session)
+        return ImageGenerationWorkItem(
+            job=_job_record(job, generation.content_id),
+            model=generation.model,
+            prompt=generation.prompt,
+            parameters=_json(generation.parameters),
+            requested_by_user=_user_record(user),
+        )
+
     def get_image_for_user(
         self,
         *,
@@ -630,6 +722,41 @@ class SqlAlchemyImageGenerationRepository:
                     models.WorkspaceMembership.workspace_id == models.GenerationJob.workspace_id,
                     models.WorkspaceMembership.user_id == user_id,
                     models.WorkspaceMembership.deleted_at.is_(None),
+                ),
+            )
+        )
+
+    def _scoped_status_select(self, user_id: UUID) -> Select[Any]:
+        return (
+            select(
+                models.GenerationJob,
+                models.Generation.content_id,
+                models.Generation.parameters,
+                models.Image,
+            )
+            .join(
+                models.Generation,
+                and_(
+                    models.Generation.id == models.GenerationJob.generation_id,
+                    models.Generation.workspace_id == models.GenerationJob.workspace_id,
+                    models.Generation.deleted_at.is_(None),
+                ),
+            )
+            .join(
+                models.WorkspaceMembership,
+                and_(
+                    models.WorkspaceMembership.workspace_id == models.GenerationJob.workspace_id,
+                    models.WorkspaceMembership.user_id == user_id,
+                    models.WorkspaceMembership.deleted_at.is_(None),
+                ),
+            )
+            .outerjoin(
+                models.Image,
+                and_(
+                    models.Image.generation_id == models.GenerationJob.generation_id,
+                    models.Image.workspace_id == models.GenerationJob.workspace_id,
+                    models.Image.content_id == models.Generation.content_id,
+                    models.Image.deleted_at.is_(None),
                 ),
             )
         )

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -33,6 +33,11 @@ class AuthLoginRequest(BaseModel):
 class AuthSignupRequest(BaseModel):
     email: str = Field(min_length=1, max_length=320)
     password: str = Field(min_length=1, max_length=4096, repr=False)
+
+
+class GenerateImageRequest(BaseModel):
+    content_id: UUID
+    style: Literal["photographic", "illustration", "product_render"]
 
 
 class GenerateTextRequest(BaseModel):

@@ -5,6 +5,8 @@ from creator.repositories.image_generation import (
     GenerationJobRecord,
     GenerationJobStatusEventRecord,
     ImageGenerationRepository,
+    ImageGenerationStatusRecord,
+    ImageGenerationWorkItem,
     ImageMetadata,
     ImageRecord,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "GenerationHistoryFilters",
     "GenerationJobRecord",
     "GenerationJobStatusEventRecord",
+    "ImageGenerationStatusRecord",
+    "ImageGenerationWorkItem",
     "ImageGenerationRepository",
     "ImageMetadata",
     "ImageRecord",

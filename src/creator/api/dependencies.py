@@ -13,10 +13,16 @@ from creator.infrastructure.auth import (
     create_auth_client,
     create_auth_token_verifier,
 )
+from creator.infrastructure.queue import get_generation_queue as get_rq_generation_queue
 from creator.infrastructure.storage import create_storage_provider
 from creator.infrastructure.unit_of_work import get_unit_of_work
 from creator.repositories import UserRecord
 from creator.services.storage.provider import StorageConfigurationError, StorageProvider
+
+try:
+    from rq import Queue
+except ImportError:  # pragma: no cover - rq is a runtime dependency
+    Queue = object  # type: ignore[misc, assignment]
 
 
 def _auth_exception(
@@ -112,6 +118,10 @@ def get_storage_provider(
             "Storage is not configured",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         ) from error
+
+
+def get_generation_queue() -> Queue:
+    return get_rq_generation_queue()
 
 
 def _invalid_auth_exception() -> HTTPException:

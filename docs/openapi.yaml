@@ -65,24 +65,33 @@ paths:
       security:
         - SupabaseBearerAuth: []
       responses:
-        '200':
-          description: Image found for the authenticated user with a fresh usable URL.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ImageResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
-        '502': { $ref: '#/components/responses/StorageUrlUnavailable' }
+        '501': { $ref: '#/components/responses/NotImplemented' }
   /api/v1/images/generate:
     post:
       operationId: generateImage
       security:
         - SupabaseBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateImageRequest' }
       responses:
+        '202':
+          description: Image Generation Job accepted and queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageGenerationStatusResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '503': { $ref: '#/components/responses/QueueEnqueueFailed' }
   /api/v1/images/{id}:
     get:
       operationId: getImage
@@ -91,9 +100,15 @@ paths:
       parameters:
         - { $ref: '#/components/parameters/ResourceId' }
       responses:
+        '200':
+          description: Current Image Generation Job status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageGenerationStatusResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '502': { $ref: '#/components/responses/StorageUrlUnavailable' }
   /api/v1/content:
     get:
       operationId: listContent
@@ -127,6 +142,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
   responses:
     LoginRejected:
       description: Supabase rejected the email and password credentials.
@@ -168,8 +188,23 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: The request conflicts with an existing resource.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ValidationFailed:
+      description: The request body, path, query, or headers failed validation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     StorageUrlUnavailable:
       description: The stored object exists but a usable URL could not be issued.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    QueueEnqueueFailed:
+      description: The Image Generation Job could not be enqueued.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -388,6 +423,15 @@ components:
     GenerationJobStatus:
       type: string
       enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+    GenerateImageStyle:
+      type: string
+      enum: [photographic, illustration, product_render]
+    GenerateImageRequest:
+      type: object
+      required: [content_id, style]
+      properties:
+        content_id: { type: string, format: uuid }
+        style: { $ref: '#/components/schemas/GenerateImageStyle' }
     GenerationJob:
       type: object
       required: [id, workspace_id, generation_id, status, attempt_count, max_attempts, queued_at, created_at, updated_at]
@@ -465,6 +509,44 @@ components:
       properties:
         success: { const: true }
         data: { $ref: '#/components/schemas/Image' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ImageGenerationStatus:
+      type: object
+      required: [id, content_id, generation_id, status, queued_at, created_at, updated_at, image, failure_code]
+      properties:
+        id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        generation_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        queued_at: { type: string, format: date-time }
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+        failed_at:
+          type: [string, 'null']
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        failure_code:
+          type: [string, 'null']
+          maxLength: 100
+        image:
+          anyOf:
+            - $ref: '#/components/schemas/Image'
+            - type: 'null'
+    ImageGenerationStatusResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ImageGenerationStatus' }
         meta:
           type: object
           required: [request_id]
