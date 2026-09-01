@@ -21,6 +21,7 @@ from creator.integrations.gemini.image_generator import (
     GeminiImageGenerationRequest,
     GeminiImageGenerator,
 )
+from creator.prompts import build_advertising_image_prompt
 from tests.fakes.gemini import FakeGeminiImageGenerator
 
 SENSITIVE_PROMPT = "launch campaign with confidential customer names"
@@ -89,10 +90,36 @@ def test_generate_success_normalizes_image_metadata_and_redacts_logs(
     assert result.prompt == SENSITIVE_PROMPT
     assert result.metadata["provider"] == "gemini"
     assert client.models.calls[0]["model"] == "gemini-image-test"
+    assert client.models.calls[0]["contents"] == SENSITIVE_PROMPT
     assert client.models.calls[0]["config"].response_modalities == ["IMAGE"]
     assert SENSITIVE_PROMPT not in caplog.text
     assert result.image_bytes.hex() not in caplog.text
     assert "secret" not in caplog.text
+
+
+def test_generate_uses_rendered_prompt_without_provider_side_composition() -> None:
+    rendered = build_advertising_image_prompt(
+        user_input={"produto": "Creator Pro", "oferta": "30 dias gratis"},
+        context={"canal": "Instagram Ads"},
+    )
+    client = FakeClient([image_response()])
+    generator = GeminiImageGenerator(
+        Settings(gemini_api_key="secret", gemini_image_model="gemini-image-test"),
+        client=client,
+        sleep=lambda delay: None,
+        jitter=lambda delay: 0,
+    )
+
+    result = generator.generate(
+        GeminiImageGenerationRequest(prompt=rendered.text, metadata=rendered.metadata)
+    )
+
+    assert client.models.calls[0]["contents"] == rendered.text
+    assert "Generate a single marketing image for Creator" not in client.models.calls[0]["contents"]
+    assert result.prompt == rendered.text
+    assert result.metadata["prompt_template_id"] == "image.advertising.v1"
+    assert result.metadata["prompt_template_version"] == "v1"
+    assert result.metadata["prompt_input_hash"] == rendered.input_hash
 
 
 def test_timeout_retries_until_success() -> None:

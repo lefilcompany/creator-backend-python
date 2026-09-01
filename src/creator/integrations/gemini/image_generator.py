@@ -116,18 +116,11 @@ class GeminiImageGenerator:
     ) -> Any:
         return self._client.models.generate_content(
             model=model,
-            contents=self._structured_prompt(request),
+            contents=request.prompt,
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE"],
                 response_mime_type=request.output_mime_type,
             ),
-        )
-
-    def _structured_prompt(self, request: GeminiImageGenerationRequest) -> str:
-        return (
-            "Generate a single marketing image for Creator.\n"
-            "Return image output only.\n"
-            f"Prompt:\n{request.prompt}"
         )
 
     def _normalize_response(
