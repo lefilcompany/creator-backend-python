@@ -445,6 +445,34 @@ def test_content_repository_scopes_pagination_by_user_membership(
     assert page.items[0].workspace_id == ids["workspace_id"]
 
 
+def test_content_repository_creates_text_content_and_generation(
+    migrated_engine: Engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        ids = seed_user_workspace_content(connection)
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        generated = unit_of_work.contents.create_text_generation(
+            workspace_id=ids["workspace_id"],
+            requested_by_user_id=ids["user_id"],
+            title="Launch campaign",
+            payload={"text": "Generated launch copy"},
+            model="gemini-2.5-flash",
+            prompt="CREATOR_PROMPT",
+            parameters={"prompt_template": {"id": "content.generation.v1"}},
+        )
+        unit_of_work.commit()
+
+    with migrated_engine.begin() as connection:
+        generation_type = connection.execute(
+            text("SELECT type FROM generations WHERE id = :generation_id"),
+            {"generation_id": generated.generation_id},
+        ).scalar_one()
+
+    assert generated.content.content_type == "TEXT"
+    assert generation_type == "TEXT"
+
+
 def test_image_generation_repository_completes_job_and_lists_history(
     migrated_engine: Engine,
 ) -> None:

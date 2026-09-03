@@ -40,6 +40,22 @@ class GenerateImageRequest(BaseModel):
     style: Literal["photographic", "illustration", "product_render"]
 
 
+class GenerateContentRequest(BaseModel):
+    workspace_id: UUID
+    topic: str = Field(min_length=1, max_length=255)
+    audience: str = Field(min_length=1, max_length=255)
+    tone: Literal["professional", "friendly", "persuasive", "educational", "formal", "casual"]
+    content_type: Literal[
+        "social_post",
+        "email",
+        "ad_copy",
+        "landing_page",
+        "blog_post",
+        "product_description",
+    ]
+    brand_voice: str = Field(min_length=1, max_length=1_000)
+
+
 class GenerateTextRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=20_000)
     temperature: float = Field(default=0.7, ge=0, le=2)

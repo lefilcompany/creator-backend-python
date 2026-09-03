@@ -20,4 +20,4 @@ Trocar o vendor não exige alterar endpoints ou casos de uso. O adapter não con
 
 ## Issues vinculadas
 
-#3, #9, #11, #13, [#17](../issues/0017-prompt-templates.md), #19, #23 e #27. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
+#3, #9, #11, #13, [#17](../issues/0017-prompt-templates.md), [#19](../issues/0019-sync-text-content-generation.md), #23 e #27. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).

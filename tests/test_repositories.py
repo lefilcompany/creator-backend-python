@@ -297,6 +297,52 @@ def test_content_repository_crud_pagination_and_soft_delete() -> None:
     assert content.deleted_at is not None
 
 
+def test_content_repository_creates_text_content_with_generation() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyContentRepository(fake_session(session))
+    workspace_id = uuid4()
+    user_id = uuid4()
+    session.execute_results.append(ExecuteResult(1))
+
+    generated = repository.create_text_generation(
+        workspace_id=workspace_id,
+        requested_by_user_id=user_id,
+        title="Launch campaign",
+        payload={"text": "Generated launch copy"},
+        model="gemini-2.5-flash",
+        prompt="CREATOR_PROMPT",
+        parameters={"prompt_template": {"id": "content.generation.v1"}},
+    )
+
+    assert generated.content.content_type == "TEXT"
+    assert generated.content.workspace_id == workspace_id
+    assert generated.content.payload == {"text": "Generated launch copy"}
+    assert generated.generation_model == "gemini-2.5-flash"
+    assert generated.generation_parameters == {"prompt_template": {"id": "content.generation.v1"}}
+    assert any(
+        isinstance(row, models.Generation) and row.generation_type == models.GenerationType.TEXT
+        for row in session.added
+    )
+
+
+def test_content_repository_rejects_text_generation_without_workspace_access() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyContentRepository(fake_session(session))
+    session.execute_results.append(ExecuteResult(0))
+
+    with pytest.raises(EntityNotFoundError):
+        repository.create_text_generation(
+            workspace_id=uuid4(),
+            requested_by_user_id=uuid4(),
+            title="Launch campaign",
+            payload={"text": "Generated launch copy"},
+            model="gemini-2.5-flash",
+            prompt="CREATOR_PROMPT",
+        )
+
+    assert session.added == []
+
+
 def test_image_generation_repository_lifecycle_paths() -> None:
     session = FakeSession()
     repository = SqlAlchemyImageGenerationRepository(fake_session(session))

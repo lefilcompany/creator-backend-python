@@ -4,9 +4,11 @@ from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.db import Base
 from creator.infrastructure.models import (
     Content,
+    ContentType,
     Generation,
     GenerationJob,
     GenerationJobStatusEvent,
+    GenerationType,
     Image,
     Settings,
     User,
@@ -46,6 +48,18 @@ def test_generation_job_status_enum_reuses_domain_values() -> None:
     status_type = Base.metadata.tables["generation_jobs"].c.status.type
 
     assert status_type.enums == [status.value for status in GenerationJobStatus]
+
+
+def test_content_and_generation_type_enums_include_text() -> None:
+    content_type_column = Base.metadata.tables["contents"].c.type.type
+    generation_type_column = Base.metadata.tables["generations"].c.type.type
+
+    assert content_type_column.enums == [content_type.value for content_type in ContentType]
+    assert generation_type_column.enums == [
+        generation_type.value for generation_type in GenerationType
+    ]
+    assert "TEXT" in content_type_column.enums
+    assert "TEXT" in generation_type_column.enums
 
 
 def test_settings_and_image_uniqueness_constraints_are_explicit() -> None:

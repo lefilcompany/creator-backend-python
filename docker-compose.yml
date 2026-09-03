@@ -1,12 +1,26 @@
 services:
+  migrate:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://creator:creator@db:5432/creator}"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: { condition: service_healthy }
   api:
     build: .
     env_file:
       - path: .env
         required: false
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://creator:creator@db:5432/creator}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
     ports:
       - "8000:8000"
     depends_on:
+      migrate: { condition: service_completed_successfully }
       db: { condition: service_healthy }
       redis: { condition: service_started }
   worker:
@@ -14,8 +28,12 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://creator:creator@db:5432/creator}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
     command: ["rq", "worker", "--url", "redis://redis:6379/0", "generations"]
     depends_on:
+      migrate: { condition: service_completed_successfully }
       redis: { condition: service_started }
   db:
     image: postgres:16-alpine

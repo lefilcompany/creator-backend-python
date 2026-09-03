@@ -9,22 +9,29 @@ from creator.api.dependencies import (
     get_auth_client,
     get_current_user,
     get_generation_queue,
+    get_llm_provider,
     get_storage_provider,
     get_uow,
 )
 from creator.application.image_generation import image_generation_request_fingerprint
 from creator.config import Settings, get_settings
 from creator.domain.auth import AuthSession, AuthSignupResult, Principal
+from creator.domain.exceptions import PersistenceError
 from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.auth import AuthLoginRejectedError, AuthSignupRejectedError
+from creator.integrations.gemini.exceptions import GeminiTimeoutError
 from creator.main import app, create_app
 from creator.repositories import (
     ContentRecord,
+    GeneratedTextContentRecord,
     GenerationJobRecord,
     ImageGenerationStatusRecord,
     ImageRecord,
+    Page,
+    SettingsRecord,
     UserRecord,
 )
+from creator.repositories.common import PageRequest
 from creator.services.storage.provider import StorageUrlError
 
 JWT_SECRET = "test-supabase-jwt-secret-with-32-bytes"
@@ -103,13 +110,70 @@ class FakeAuthClient:
 
 
 class FakeContentRepository:
-    def __init__(self, content: ContentRecord | None) -> None:
+    def __init__(
+        self,
+        content: ContentRecord | None,
+        *,
+        page: Page[ContentRecord] | None = None,
+        workspace_access: bool = True,
+        create_error: Exception | None = None,
+    ) -> None:
         self.content = content
+        self.page = page
+        self.workspace_access = workspace_access
+        self.create_error = create_error
         self.requests: list[dict[str, UUID]] = []
+        self.workspace_requests: list[dict[str, UUID]] = []
+        self.created_text_generations: list[dict[str, object]] = []
 
     def get_by_id_for_user(self, *, user_id: UUID, content_id: UUID) -> ContentRecord | None:
         self.requests.append({"user_id": user_id, "content_id": content_id})
         return self.content
+
+    def user_has_workspace_access(self, *, user_id: UUID, workspace_id: UUID) -> bool:
+        self.workspace_requests.append({"user_id": user_id, "workspace_id": workspace_id})
+        return self.workspace_access
+
+    def create_text_generation(self, **kwargs: object) -> GeneratedTextContentRecord:
+        self.created_text_generations.append(kwargs)
+        if self.create_error is not None:
+            raise self.create_error
+        return GeneratedTextContentRecord(
+            content=ContentRecord(
+                id=UUID("21000000-0000-0000-0000-000000000001"),
+                workspace_id=kwargs["workspace_id"],
+                created_by_user_id=kwargs["requested_by_user_id"],
+                content_type="TEXT",
+                title=str(kwargs["title"]),
+                payload=kwargs["payload"],
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                deleted_at=None,
+            ),
+            generation_id=UUID("61000000-0000-0000-0000-000000000001"),
+            generation_model=str(kwargs["model"]),
+            generation_parameters=kwargs["parameters"],
+        )
+
+    def list_for_user(
+        self,
+        *,
+        user_id: UUID,
+        page: PageRequest,
+    ) -> Page[ContentRecord]:
+        if self.page is not None:
+            return self.page
+        return Page(items=[], total=0, page=page.page, limit=page.limit)
+
+
+class FakeSettingsRepository:
+    def __init__(self, settings: SettingsRecord | None = None) -> None:
+        self.settings = settings
+        self.requests: list[UUID] = []
+
+    def get_by_user_id(self, user_id: UUID) -> SettingsRecord | None:
+        self.requests.append(user_id)
+        return self.settings
 
 
 class FakeImageGenerationRepository:
@@ -159,10 +223,20 @@ class FakeUnitOfWork:
         self,
         *,
         content: ContentRecord | None = None,
+        content_page: Page[ContentRecord] | None = None,
+        workspace_access: bool = True,
+        content_create_error: Exception | None = None,
+        settings_record: SettingsRecord | None = None,
         status: ImageGenerationStatusRecord | None = None,
         existing: ImageGenerationStatusRecord | None = None,
     ) -> None:
-        self.contents = FakeContentRepository(content)
+        self.contents = FakeContentRepository(
+            content,
+            page=content_page,
+            workspace_access=workspace_access,
+            create_error=content_create_error,
+        )
+        self.settings = FakeSettingsRepository(settings_record)
         self.image_generations = FakeImageGenerationRepository(status=status, existing=existing)
         self.commits = 0
         self.rollbacks = 0
@@ -172,6 +246,24 @@ class FakeUnitOfWork:
 
     def rollback(self) -> None:
         self.rollbacks += 1
+
+
+class FakeLLMProvider:
+    def __init__(
+        self,
+        *,
+        output: str = "Generated launch copy",
+        error: Exception | None = None,
+    ) -> None:
+        self.output = output
+        self.error = error
+        self.prompts: list[str] = []
+
+    def generate_text(self, prompt: str, temperature: float = 0.7) -> str:
+        self.prompts.append(prompt)
+        if self.error:
+            raise self.error
+        return self.output
 
 
 class FakeGenerationQueue:
@@ -231,6 +323,52 @@ def content_record(content_id: UUID) -> ContentRecord:
         updated_at=datetime.now(UTC),
         deleted_at=None,
     )
+
+
+def text_content_record(content_id: UUID) -> ContentRecord:
+    return ContentRecord(
+        id=content_id,
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        created_by_user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        content_type="TEXT",
+        title="Launch campaign",
+        payload={
+            "text": "Generated launch copy",
+            "request": {
+                "topic": "Launch campaign",
+                "audience": "marketing managers",
+                "tone": "professional",
+                "content_type": "email",
+                "brand_voice": "Clear and useful",
+            },
+        },
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def settings_record(preferences: dict[str, object]) -> SettingsRecord:
+    return SettingsRecord(
+        id=UUID("90000000-0000-0000-0000-000000000001"),
+        user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        preferences=preferences,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+
+def generate_content_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "workspace_id": "10000000-0000-0000-0000-000000000001",
+        "topic": "Launch campaign",
+        "audience": "marketing managers",
+        "tone": "professional",
+        "content_type": "email",
+        "brand_voice": "Clear and useful",
+    }
+    payload.update(overrides)
+    return payload
 
 
 def job_record(
@@ -332,16 +470,143 @@ async def test_live_health_returns_contract_envelope() -> None:
 
 
 @pytest.mark.anyio
-async def test_reserved_route_returns_structured_error() -> None:
-    async with AsyncClient(
-        transport=ASGITransport(app=authorized_app()), base_url="http://test"
-    ) as client:
-        response = await client.post("/api/v1/content/generate")
+async def test_generate_content_persists_text_content() -> None:
+    unit_of_work = FakeUnitOfWork(
+        settings_record=settings_record({"locale": "pt-BR", "brand": "Lefil"})
+    )
+    llm_provider = FakeLLMProvider(output="Generated launch copy")
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
 
-    assert response.status_code == 501
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/generate",
+            json=generate_content_payload(),
+        )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert response.json()["data"]["id"] == "21000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["type"] == "TEXT"
+    assert response.json()["data"]["payload"]["text"] == "Generated launch copy"
+    assert response.json()["data"]["generation"]["id"] == "61000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["generation"]["model"] == "gemini-2.5-flash"
+    assert response.headers["X-Request-ID"] == response.json()["meta"]["request_id"]
+    assert "CREATOR_PROMPT" in llm_provider.prompts[0]
+    assert '"settings"' in llm_provider.prompts[0]
+    created = unit_of_work.contents.created_text_generations[0]
+    assert created["workspace_id"] == UUID("10000000-0000-0000-0000-000000000001")
+    assert created["model"] == "gemini-2.5-flash"
+    assert created["parameters"]["prompt_template"]["id"] == "content.generation.v1"
+    assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_generate_content_returns_validation_error_envelope() -> None:
+    application = authorized_app()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/generate",
+            json=generate_content_payload(tone="urgent", topic=""),
+        )
+
+    assert response.status_code == 422
     assert response.json()["success"] is False
-    assert response.json()["error"]["code"] == "NOT_IMPLEMENTED"
-    assert response.json()["meta"]["request_id"]
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
+    assert response.headers["X-Request-ID"] == response.json()["meta"]["request_id"]
+
+
+@pytest.mark.anyio
+async def test_generate_content_rejects_workspace_without_membership() -> None:
+    unit_of_work = FakeUnitOfWork(workspace_access=False)
+    llm_provider = FakeLLMProvider()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/generate",
+            json=generate_content_payload(),
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "WORKSPACE_ACCESS_DENIED"
+    assert llm_provider.prompts == []
+    assert unit_of_work.contents.created_text_generations == []
+
+
+@pytest.mark.anyio
+async def test_generate_content_maps_provider_timeout_without_persisting() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: FakeLLMProvider(
+        error=GeminiTimeoutError("slow")
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/generate",
+            json=generate_content_payload(),
+        )
+
+    assert response.status_code == 504
+    assert response.json()["error"]["code"] == "LLM_PROVIDER_TIMEOUT"
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_generate_content_rolls_back_when_persistence_fails() -> None:
+    unit_of_work = FakeUnitOfWork(content_create_error=PersistenceError("db failed"))
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: FakeLLMProvider()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/generate",
+            json=generate_content_payload(),
+        )
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "CONTENT_GENERATION_PERSISTENCE_FAILED"
+    assert unit_of_work.commits == 0
+    assert unit_of_work.rollbacks == 1
+
+
+@pytest.mark.anyio
+async def test_list_content_returns_history_for_current_user() -> None:
+    content = text_content_record(UUID("21000000-0000-0000-0000-000000000001"))
+    unit_of_work = FakeUnitOfWork(
+        content_page=Page(items=[content], total=1, page=1, limit=20),
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/content")
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert response.json()["data"]["items"][0]["id"] == "21000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["items"][0]["type"] == "TEXT"
+    assert response.json()["data"]["pagination"] == {"page": 1, "limit": 20, "total": 1}
 
 
 @pytest.mark.anyio
@@ -444,6 +709,33 @@ async def test_signup_rejects_invalid_request_with_structured_error() -> None:
 
 
 @pytest.mark.anyio
+async def test_signup_rejection_includes_normalized_provider_message() -> None:
+    application = create_app()
+    application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(
+        AuthSignupRejectedError(
+            "rejected",
+            provider_code="user_already_exists",
+            provider_message="User already registered",
+        )
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/auth/signup",
+            json={"email": "new-principal@example.com", "password": "password"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["success"] is False
+    assert response.json()["error"] == {
+        "code": "SIGNUP_REJECTED",
+        "message": "User already registered",
+    }
+
+
+@pytest.mark.anyio
 async def test_api_v1_route_requires_auth_when_enabled() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=authenticated_app()), base_url="http://test"
@@ -457,6 +749,21 @@ async def test_api_v1_route_requires_auth_when_enabled() -> None:
 
 
 @pytest.mark.anyio
+async def test_api_v1_route_rejects_bearer_token_without_optional_auth_config() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=unauthenticated_app()), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/images/generate",
+            headers={"Authorization": f"Bearer {supabase_access_token()}"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["success"] is False
+    assert response.json()["error"]["code"] == "AUTHENTICATION_INVALID"
+
+
+@pytest.mark.anyio
 async def test_api_v1_route_accepts_valid_supabase_token_when_enabled() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=authorized_app()), base_url="http://test"
@@ -466,8 +773,8 @@ async def test_api_v1_route_accepts_valid_supabase_token_when_enabled() -> None:
             headers={"Authorization": f"Bearer {supabase_access_token()}"},
         )
 
-    assert response.status_code == 501
-    assert response.json()["error"]["code"] == "NOT_IMPLEMENTED"
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
 @pytest.mark.anyio
@@ -741,9 +1048,28 @@ async def test_swagger_and_openapi_are_available() -> None:
 
     assert docs_response.status_code == 200
     assert openapi_response.status_code == 200
-    assert "/health" in openapi_response.json()["paths"]
-    assert "/api/v1/auth/login" in openapi_response.json()["paths"]
-    assert "/api/v1/auth/signup" in openapi_response.json()["paths"]
+    openapi_schema = openapi_response.json()
+    assert "/health" in openapi_schema["paths"]
+    assert "/api/v1/auth/login" in openapi_schema["paths"]
+    assert "/api/v1/auth/signup" in openapi_schema["paths"]
+
+
+@pytest.mark.anyio
+async def test_swagger_uses_bearer_security_for_protected_routes() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/openapi.json")
+
+    openapi_schema = response.json()
+    assert openapi_schema["components"]["securitySchemes"]["SupabaseBearerAuth"] == {
+        "type": "http",
+        "scheme": "bearer",
+    }
+    generate_operation = openapi_schema["paths"]["/api/v1/content/generate"]["post"]
+    assert generate_operation["security"] == [{"SupabaseBearerAuth": []}]
+    assert all(
+        parameter["name"] != "authorization"
+        for parameter in generate_operation.get("parameters", [])
+    )
 
 
 def test_application_factory_and_compatibility_entrypoint() -> None:

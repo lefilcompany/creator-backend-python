@@ -10,6 +10,10 @@ docker compose up --build
 curl http://localhost:8000/health
 ```
 
+O Compose executa `alembic upgrade head` no serviço `migrate` antes de iniciar a API e o worker.
+Se estiver usando o Postgres do próprio Compose, mantenha `DATABASE_URL` com host `db`, como em
+`.env.example`; use `localhost` apenas quando rodar a API diretamente na máquina host.
+
 Localmente, instale as dependências pinadas e inicie a aplicação:
 
 ```bash
@@ -17,6 +21,7 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e '.[dev]'
+alembic upgrade head
 uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -27,11 +32,16 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -e ".[dev]"
+alembic upgrade head
 uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Swagger fica disponível em `http://localhost:8000/docs`; ReDoc em `http://localhost:8000/redoc`.
 Execute a validação local com `ruff check src tests`, `ruff format --check src tests`, `mypy src` e `pytest`. Em ambientes com `make`, `make check` roda o mesmo conjunto.
+
+Para gerar Content de texto ou imagem com Gemini real, configure `GEMINI_API_KEY` no `.env`.
+Sem essa chave, os endpoints protegidos continuam disponíveis, mas chamadas de geração retornam
+erro estruturado de provider não configurado depois da autenticação e autorização de Workspace.
 
 ## Arquitetura
 

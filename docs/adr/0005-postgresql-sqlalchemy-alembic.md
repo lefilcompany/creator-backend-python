@@ -12,4 +12,4 @@ Casos de uso não acessam `Session` SQLAlchemy diretamente. A aplicação depend
 
 ## Issues vinculadas
 
-#2, #3, #5, #6, #12 e #29. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
+#2, #3, #5, #6, #12, #19 e #29. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).

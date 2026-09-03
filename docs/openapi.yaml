@@ -64,10 +64,25 @@ paths:
       operationId: generateContent
       security:
         - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateContentRequest' }
       responses:
+        '200':
+          description: Generated text Content persisted for the authenticated user's Workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeneratedContentResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '500': { $ref: '#/components/responses/AuthMisconfigured' }
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '403': { $ref: '#/components/responses/WorkspaceAccessDenied' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/LlmProviderRateLimited' }
+        '500': { $ref: '#/components/responses/LlmProviderMisconfigured' }
+        '502': { $ref: '#/components/responses/LlmProviderInvalidResponse' }
+        '503': { $ref: '#/components/responses/LlmProviderUnavailable' }
+        '504': { $ref: '#/components/responses/LlmProviderTimedOut' }
   /api/v1/images/generate:
     post:
       operationId: generateImage
@@ -114,10 +129,31 @@ paths:
       operationId: listContent
       security:
         - SupabaseBearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [-created_at, created_at]
+            default: -created_at
       responses:
+        '200':
+          description: Paginated Content visible to the authenticated user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentPageResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
-        '501': { $ref: '#/components/responses/NotImplemented' }
   /api/v1/content/{id}:
     delete:
       operationId: deleteContent
@@ -154,7 +190,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     SignupRejected:
-      description: Supabase rejected the signup request.
+      description: Supabase rejected the signup request; the error message may include a normalized Supabase Auth reason.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -180,6 +216,36 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     AuthMisconfigured:
       description: Authentication is required but Supabase JWT verification is not configured.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceAccessDenied:
+      description: The authenticated user does not have an active Membership for the Workspace.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderMisconfigured:
+      description: Text generation provider is misconfigured or generated Content could not be persisted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderRateLimited:
+      description: Text generation provider quota or rate limit was exceeded.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderInvalidResponse:
+      description: Text generation provider returned an invalid response.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderUnavailable:
+      description: Text generation provider failed or is temporarily unavailable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderTimedOut:
+      description: Text generation provider did not answer before the configured timeout.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -385,7 +451,7 @@ components:
           format: uuid
         type:
           type: string
-          enum: [IMAGE]
+          enum: [IMAGE, TEXT]
         title:
           type: [string, 'null']
           maxLength: 255
@@ -409,7 +475,7 @@ components:
           format: uuid
         type:
           type: string
-          enum: [IMAGE]
+          enum: [IMAGE, TEXT]
         model: { type: string, maxLength: 255 }
         prompt: { type: string, minLength: 1, maxLength: 20000 }
         parameters:
@@ -420,6 +486,74 @@ components:
         deleted_at:
           type: [string, 'null']
           format: date-time
+    GenerateContentTone:
+      type: string
+      enum: [professional, friendly, persuasive, educational, formal, casual]
+    GenerateContentType:
+      type: string
+      enum: [social_post, email, ad_copy, landing_page, blog_post, product_description]
+    GenerateContentRequest:
+      type: object
+      required: [workspace_id, topic, audience, tone, content_type, brand_voice]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        topic: { type: string, minLength: 1, maxLength: 255 }
+        audience: { type: string, minLength: 1, maxLength: 255 }
+        tone: { $ref: '#/components/schemas/GenerateContentTone' }
+        content_type: { $ref: '#/components/schemas/GenerateContentType' }
+        brand_voice: { type: string, minLength: 1, maxLength: 1000 }
+    GeneratedContentGeneration:
+      type: object
+      required: [id, model, parameters]
+      properties:
+        id: { type: string, format: uuid }
+        model: { type: string, maxLength: 255 }
+        parameters:
+          type: object
+          additionalProperties: true
+    GeneratedContent:
+      allOf:
+        - $ref: '#/components/schemas/Content'
+        - type: object
+          required: [generation]
+          properties:
+            generation: { $ref: '#/components/schemas/GeneratedContentGeneration' }
+    GeneratedContentResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/GeneratedContent' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ContentPage:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Content' }
+        pagination:
+          type: object
+          required: [page, limit, total]
+          properties:
+            page: { type: integer, minimum: 1 }
+            limit: { type: integer, minimum: 1 }
+            total: { type: integer, minimum: 0 }
+    ContentPageResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ContentPage' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     GenerationJobStatus:
       type: string
       enum: [PENDING, PROCESSING, COMPLETED, FAILED]

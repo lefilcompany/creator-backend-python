@@ -43,10 +43,12 @@ class WorkspaceRole(StrEnum):
 
 class ContentType(StrEnum):
     IMAGE = "IMAGE"
+    TEXT = "TEXT"
 
 
 class GenerationType(StrEnum):
     IMAGE = "IMAGE"
+    TEXT = "TEXT"
 
 
 uuid_pk = PGUUID(as_uuid=True)

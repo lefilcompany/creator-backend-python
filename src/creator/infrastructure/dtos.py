@@ -20,6 +20,7 @@ from creator.infrastructure import models
 from creator.repositories import (
     ContentFilters,
     ContentRecord,
+    GeneratedTextContentRecord,
     GenerationHistoryFilters,
     GenerationJobRecord,
     ImageGenerationStatusRecord,
@@ -282,18 +283,85 @@ class SqlAlchemyContentRepository:
         *,
         workspace_id: UUID,
         created_by_user_id: UUID | None,
+        content_type: str = "IMAGE",
         title: str | None = None,
         payload: JsonObject | None = None,
     ) -> ContentRecord:
         row = models.Content(
             workspace_id=workspace_id,
             created_by_user_id=created_by_user_id,
+            content_type=content_type,
             title=title,
             payload=_json(payload),
         )
         self._session.add(row)
         flush_or_raise(self._session)
         return _content_record(row)
+
+    def create_text_generation(
+        self,
+        *,
+        workspace_id: UUID,
+        requested_by_user_id: UUID,
+        title: str,
+        payload: JsonObject,
+        model: str,
+        prompt: str,
+        parameters: JsonObject | None = None,
+    ) -> GeneratedTextContentRecord:
+        if not self.user_has_workspace_access(
+            user_id=requested_by_user_id,
+            workspace_id=workspace_id,
+        ):
+            raise EntityNotFoundError("Workspace not found")
+
+        content = models.Content(
+            workspace_id=workspace_id,
+            created_by_user_id=requested_by_user_id,
+            content_type=models.ContentType.TEXT,
+            title=title,
+            payload=_json(payload),
+        )
+        self._session.add(content)
+        flush_or_raise(self._session)
+
+        generation = models.Generation(
+            workspace_id=workspace_id,
+            content_id=content.id,
+            requested_by_user_id=requested_by_user_id,
+            generation_type=models.GenerationType.TEXT,
+            model=model,
+            prompt=prompt,
+            parameters=_json(parameters),
+        )
+        self._session.add(generation)
+        flush_or_raise(self._session)
+
+        return GeneratedTextContentRecord(
+            content=_content_record(content),
+            generation_id=generation.id,
+            generation_model=model,
+            generation_parameters=_json(generation.parameters),
+        )
+
+    def user_has_workspace_access(self, *, user_id: UUID, workspace_id: UUID) -> bool:
+        statement = (
+            select(func.count())
+            .select_from(models.WorkspaceMembership)
+            .join(
+                models.Workspace,
+                and_(
+                    models.Workspace.id == models.WorkspaceMembership.workspace_id,
+                    models.Workspace.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.workspace_id == workspace_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
+            )
+        )
+        return self._session.execute(statement).scalar_one() > 0
 
     def get_by_id_for_user(
         self,

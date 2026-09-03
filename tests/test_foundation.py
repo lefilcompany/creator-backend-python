@@ -1,6 +1,8 @@
 import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from urllib.error import HTTPError
 from urllib.request import Request as UrlRequest
 from uuid import UUID, uuid4
 
@@ -15,7 +17,9 @@ from creator.domain.auth import Principal
 from creator.infrastructure.auth import (
     AuthConfigurationError,
     AuthInvalidResponseError,
+    AuthLoginRejectedError,
     AuthRateLimitedError,
+    AuthSignupRejectedError,
     AuthTimeoutError,
     SupabaseAuthClient,
     SupabaseAuthTokenVerifier,
@@ -427,6 +431,15 @@ def test_required_supabase_auth_without_settings_fails_closed() -> None:
     assert error.value.detail["code"] == "AUTHENTICATION_MISCONFIGURED"
 
 
+def test_optional_supabase_auth_without_settings_is_anonymous() -> None:
+    principal = get_principal(
+        f"Bearer {supabase_access_token()}",
+        Settings(auth_required=False, supabase_url=""),
+    )
+
+    assert principal is None
+
+
 def test_supabase_auth_client_signs_in_with_password_without_real_network() -> None:
     opener = FakeSupabaseOpener(
         FakeSupabaseResponse(
@@ -528,6 +541,43 @@ def test_supabase_auth_client_differentiates_rate_limit() -> None:
 
     with pytest.raises(AuthRateLimitedError):
         client.sign_in_with_password(email="principal@example.com", password="password")
+
+
+def test_supabase_auth_client_treats_422_login_as_rejected() -> None:
+    client = SupabaseAuthClient(
+        supabase_login_settings(),
+        opener=FakeSupabaseOpener(
+            FakeSupabaseResponse(
+                {"code": "invalid_credentials", "message": "Invalid login credentials"},
+                status=422,
+            )
+        ),
+    )
+
+    with pytest.raises(AuthLoginRejectedError) as error:
+        client.sign_in_with_password(email="principal@example.com", password="password")
+
+    assert error.value.provider_code == "invalid_credentials"
+    assert error.value.provider_message == "Invalid login credentials"
+
+
+def test_supabase_auth_client_treats_http_422_signup_as_rejected() -> None:
+    def opener(request: UrlRequest, timeout: float) -> FakeSupabaseResponse:
+        raise HTTPError(
+            request.full_url,
+            422,
+            "Unprocessable Entity",
+            hdrs={},
+            fp=BytesIO(b'{"code":"user_already_exists","msg":"User already registered"}'),
+        )
+
+    client = SupabaseAuthClient(supabase_login_settings(), opener=opener)
+
+    with pytest.raises(AuthSignupRejectedError) as error:
+        client.sign_up_with_password(email="principal@example.com", password="password")
+
+    assert error.value.provider_code == "user_already_exists"
+    assert error.value.provider_message == "User already registered"
 
 
 def test_supabase_auth_client_differentiates_timeout() -> None:

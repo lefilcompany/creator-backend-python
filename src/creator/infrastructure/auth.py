@@ -20,6 +20,7 @@ from creator.domain.auth import AuthSession, AuthSignupResult, Principal
 
 ASYMMETRIC_JWT_ALGORITHMS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA")
 REQUIRED_JWT_CLAIMS = ("iss", "aud", "exp", "iat", "sub", "role", "session_id")
+AUTH_REJECTED_STATUS_CODES = {400, 401, 403, 422}
 
 
 class AuthTokenVerifier(Protocol):
@@ -38,6 +39,17 @@ class AuthClient(Protocol):
 
 class AuthError(Exception):
     """Base class for authentication failures at the Creator boundary."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider_code: str | None = None,
+        provider_message: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.provider_code = provider_code
+        self.provider_message = provider_message
 
 
 class AuthConfigurationError(AuthError):
@@ -230,8 +242,8 @@ class SupabaseAuthClient:
             raise AuthUpstreamError("Supabase Auth returned an upstream error")
         if status_code == 429:
             raise AuthRateLimitedError("Supabase Auth rate limit exceeded")
-        if status_code in {400, 401, 403}:
-            raise rejected_error("Supabase Auth rejected the request")
+        if status_code in AUTH_REJECTED_STATUS_CODES:
+            raise _rejected_auth_error(rejected_error, response_body)
         if status_code >= 400:
             raise AuthUpstreamError("Supabase Auth request failed")
         return response_body
@@ -244,8 +256,8 @@ class SupabaseAuthClient:
     ) -> None:
         if error.code == 429:
             raise AuthRateLimitedError("Supabase Auth rate limit exceeded") from error
-        if error.code in {400, 401, 403}:
-            raise rejected_error("Supabase Auth rejected the request") from error
+        if error.code in AUTH_REJECTED_STATUS_CODES:
+            raise _rejected_auth_error(rejected_error, _http_error_body(error)) from error
         if error.code >= 500:
             raise AuthUpstreamError("Supabase Auth returned an upstream error") from error
         raise AuthUpstreamError("Supabase Auth request failed") from error
@@ -313,6 +325,55 @@ def create_auth_token_verifier(settings: Settings) -> AuthTokenVerifier:
 
 def create_auth_client(settings: Settings) -> AuthClient:
     return SupabaseAuthClient(settings)
+
+
+def _rejected_auth_error(rejected_error: type[AuthError], response_body: bytes) -> AuthError:
+    provider_code, provider_message = _provider_error_details(response_body)
+    return rejected_error(
+        "Supabase Auth rejected the request",
+        provider_code=provider_code,
+        provider_message=provider_message,
+    )
+
+
+def _http_error_body(error: HTTPError) -> bytes:
+    try:
+        return bytes(error.read())
+    except (AttributeError, ValueError):
+        return b""
+
+
+def _provider_error_details(response_body: bytes) -> tuple[str | None, str | None]:
+    try:
+        payload = json.loads(response_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None, None
+    if not isinstance(payload, dict):
+        return None, None
+
+    provider_code = _first_sanitized_string(payload, "code", "error_code")
+    provider_message = _first_sanitized_string(
+        payload,
+        "message",
+        "msg",
+        "error_description",
+    )
+    if provider_message is None:
+        provider_message = _first_sanitized_string(payload, "error")
+    return provider_code, provider_message
+
+
+def _first_sanitized_string(payload: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return _sanitize_provider_text(value)
+    return None
+
+
+def _sanitize_provider_text(value: str) -> str:
+    compact = " ".join(value.split())
+    return compact[:200]
 
 
 def _string_claim(claims: dict[str, Any], claim_name: str) -> str | None:

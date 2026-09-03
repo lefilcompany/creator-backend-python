@@ -10,4 +10,4 @@ Listagens usam `page`, `limit` e `sort`; texto aceita até 20.000 caracteres; up
 
 ## Issues vinculadas
 
-#5, #13, #15, #18, #22 e #25. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
+#5, #13, #15, #18, #19, #22 e #25. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).

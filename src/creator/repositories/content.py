@@ -22,6 +22,14 @@ class ContentRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class GeneratedTextContentRecord:
+    content: ContentRecord
+    generation_id: UUID
+    generation_model: str
+    generation_parameters: JsonObject
+
+
+@dataclass(frozen=True, slots=True)
 class ContentFilters:
     workspace_id: UUID | None = None
     content_type: str | None = None
@@ -36,9 +44,24 @@ class ContentRepository(Protocol):
         *,
         workspace_id: UUID,
         created_by_user_id: UUID | None,
+        content_type: str = "IMAGE",
         title: str | None = None,
         payload: JsonObject | None = None,
     ) -> ContentRecord: ...
+
+    def create_text_generation(
+        self,
+        *,
+        workspace_id: UUID,
+        requested_by_user_id: UUID,
+        title: str,
+        payload: JsonObject,
+        model: str,
+        prompt: str,
+        parameters: JsonObject | None = None,
+    ) -> GeneratedTextContentRecord: ...
+
+    def user_has_workspace_access(self, *, user_id: UUID, workspace_id: UUID) -> bool: ...
 
     def get_by_id_for_user(
         self,

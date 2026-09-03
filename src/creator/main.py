@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Path, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -12,10 +12,22 @@ from creator.api.dependencies import (
     get_auth_client,
     get_current_user,
     get_generation_queue,
+    get_llm_provider,
     get_storage_provider,
     get_uow,
 )
-from creator.api.schemas import AuthLoginRequest, AuthSignupRequest, GenerateImageRequest
+from creator.api.schemas import (
+    AuthLoginRequest,
+    AuthSignupRequest,
+    GenerateContentRequest,
+    GenerateImageRequest,
+)
+from creator.application.content_generation import (
+    ContentGenerationPersistenceError,
+    GenerateContentCommand,
+    WorkspaceAccessDeniedError,
+    generate_content,
+)
 from creator.application.image_generation import (
     GenerationQueue,
     IdempotencyConflictError,
@@ -37,7 +49,24 @@ from creator.infrastructure.auth import (
     AuthTimeoutError,
     AuthUpstreamError,
 )
-from creator.repositories import ImageGenerationStatusRecord, ImageRecord, UserRecord
+from creator.integrations.gemini.exceptions import (
+    GeminiAuthenticationError,
+    GeminiBlockedContentError,
+    GeminiInvalidResponseError,
+    GeminiProviderError,
+    GeminiQuotaError,
+    GeminiTimeoutError,
+    GeminiTransientError,
+)
+from creator.repositories import (
+    ContentRecord,
+    ImageGenerationStatusRecord,
+    ImageRecord,
+    Page,
+    UserRecord,
+)
+from creator.repositories.common import PageRequest
+from creator.services.ai.provider import LLMProvider, ProviderNotConfiguredError
 from creator.services.storage.provider import StorageProvider, StorageUrlError
 
 
@@ -137,6 +166,46 @@ def _auth_signup_data(result: AuthSignupResult) -> dict[str, Any]:
         "confirmation_required": result.confirmation_required,
         "provider": result.provider,
         "metadata": result.metadata,
+    }
+
+
+def _content_data(
+    content: ContentRecord,
+    *,
+    generation_id: UUID | None = None,
+    generation_model: str | None = None,
+    generation_parameters: dict[str, object] | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "id": str(content.id),
+        "workspace_id": str(content.workspace_id),
+        "created_by_user_id": str(content.created_by_user_id)
+        if content.created_by_user_id
+        else None,
+        "type": content.content_type,
+        "title": content.title,
+        "payload": content.payload,
+        "created_at": content.created_at.isoformat(),
+        "updated_at": content.updated_at.isoformat(),
+        "deleted_at": content.deleted_at.isoformat() if content.deleted_at else None,
+    }
+    if generation_id is not None:
+        data["generation"] = {
+            "id": str(generation_id),
+            "model": generation_model,
+            "parameters": generation_parameters or {},
+        }
+    return data
+
+
+def _content_page_data(page: Page[ContentRecord]) -> dict[str, Any]:
+    return {
+        "items": [_content_data(item) for item in page.items],
+        "pagination": {
+            "page": page.page,
+            "limit": page.limit,
+            "total": page.total,
+        },
     }
 
 
@@ -308,7 +377,7 @@ def create_app() -> FastAPI:
                 status_code=400,
                 detail={
                     "code": "SIGNUP_REJECTED",
-                    "message": "Signup request was rejected",
+                    "message": error.provider_message or "Signup request was rejected",
                 },
             ) from error
         except AuthRateLimitedError as error:
@@ -346,13 +415,112 @@ def create_app() -> FastAPI:
 
         return success_response(_auth_signup_data(result), request)
 
-    api_dependencies = [Depends(get_current_user)]
-    application.add_api_route(
-        "/api/v1/content/generate",
-        not_implemented,
-        methods=["POST"],
-        dependencies=api_dependencies,
-    )
+    @application.post("/api/v1/content/generate")
+    def generate_text_content(
+        payload: GenerateContentRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    ) -> JSONResponse:
+        try:
+            generated = generate_content(
+                unit_of_work=unit_of_work,
+                settings=settings,
+                llm_provider=llm_provider,
+                user=current_user,
+                command=GenerateContentCommand(
+                    workspace_id=payload.workspace_id,
+                    topic=payload.topic,
+                    audience=payload.audience,
+                    tone=payload.tone,
+                    content_type=payload.content_type,
+                    brand_voice=payload.brand_voice,
+                ),
+            )
+        except WorkspaceAccessDeniedError as error:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "WORKSPACE_ACCESS_DENIED",
+                    "message": "Workspace is not visible to the authenticated user",
+                },
+            ) from error
+        except ProviderNotConfiguredError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "LLM_PROVIDER_MISCONFIGURED",
+                    "message": "LLM provider is not configured",
+                },
+            ) from error
+        except GeminiAuthenticationError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "LLM_PROVIDER_MISCONFIGURED",
+                    "message": "LLM provider authentication is not configured",
+                },
+            ) from error
+        except GeminiQuotaError as error:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "LLM_PROVIDER_RATE_LIMITED",
+                    "message": "LLM provider quota or rate limit exceeded",
+                },
+            ) from error
+        except GeminiBlockedContentError as error:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "CONTENT_GENERATION_BLOCKED",
+                    "message": "Content generation was blocked by the provider",
+                },
+            ) from error
+        except GeminiInvalidResponseError as error:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "LLM_PROVIDER_INVALID_RESPONSE",
+                    "message": "LLM provider returned an invalid response",
+                },
+            ) from error
+        except GeminiTimeoutError as error:
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "code": "LLM_PROVIDER_TIMEOUT",
+                    "message": "LLM provider timed out",
+                },
+            ) from error
+        except (GeminiTransientError, GeminiProviderError) as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "LLM_PROVIDER_UNAVAILABLE",
+                    "message": "LLM provider is unavailable",
+                },
+            ) from error
+        except ContentGenerationPersistenceError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "CONTENT_GENERATION_PERSISTENCE_FAILED",
+                    "message": "Generated Content could not be persisted",
+                },
+            ) from error
+
+        return success_response(
+            _content_data(
+                generated.content,
+                generation_id=generated.generation_id,
+                generation_model=generated.generation_model,
+                generation_parameters=generated.generation_parameters,
+            ),
+            request,
+        )
 
     @application.post("/api/v1/images/generate")
     def generate_image(
@@ -437,12 +605,26 @@ def create_app() -> FastAPI:
             request,
         )
 
-    application.add_api_route(
-        "/api/v1/content",
-        not_implemented,
-        methods=["GET"],
-        dependencies=api_dependencies,
-    )
+    @application.get("/api/v1/content")
+    def list_content(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        page: Annotated[int, Query(ge=1)] = 1,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+    ) -> JSONResponse:
+        content_page = unit_of_work.contents.list_for_user(
+            user_id=current_user.id,
+            page=PageRequest(
+                page=page,
+                limit=limit,
+                sort="asc" if sort == "created_at" else "desc",
+            ),
+        )
+        return success_response(_content_page_data(content_page), request)
+
+    api_dependencies = [Depends(get_current_user)]
     application.add_api_route(
         "/api/v1/content/{id}",
         not_implemented,

@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings, get_settings
@@ -17,12 +18,17 @@ from creator.infrastructure.queue import get_generation_queue as get_rq_generati
 from creator.infrastructure.storage import create_storage_provider
 from creator.infrastructure.unit_of_work import get_unit_of_work
 from creator.repositories import UserRecord
+from creator.services.ai.factory import create_llm_provider
+from creator.services.ai.provider import LLMProvider
 from creator.services.storage.provider import StorageConfigurationError, StorageProvider
 
 try:
     from rq import Queue
 except ImportError:  # pragma: no cover - rq is a runtime dependency
     Queue = object  # type: ignore[misc, assignment]
+
+
+bearer_scheme = HTTPBearer(auto_error=False, scheme_name="SupabaseBearerAuth")
 
 
 def _auth_exception(
@@ -38,21 +44,24 @@ def _auth_exception(
 
 
 def get_principal(
-    authorization: Annotated[str | None, Header()] = None,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | str | None,
+        Security(bearer_scheme),
+    ] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
 ) -> Principal | None:
-    if not authorization:
+    token = _bearer_token(credentials)
+    if token is None:
         if settings.auth_required:
             raise _invalid_auth_exception()
         return None
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise _invalid_auth_exception()
 
     verifier = create_auth_token_verifier(settings)
     try:
         return verifier.verify(token)
     except AuthConfigurationError as error:
+        if not settings.auth_required:
+            return None
         raise _auth_exception(
             "AUTHENTICATION_MISCONFIGURED",
             "Authentication is not configured",
@@ -107,6 +116,12 @@ def get_auth_client(
     return create_auth_client(settings)
 
 
+def get_llm_provider(
+    settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
+) -> LLMProvider:
+    return create_llm_provider(settings)
+
+
 def get_storage_provider(
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
 ) -> StorageProvider:
@@ -126,6 +141,19 @@ def get_generation_queue() -> Queue:
 
 def _invalid_auth_exception() -> HTTPException:
     return _auth_exception("AUTHENTICATION_INVALID", "Authentication failed")
+
+
+def _bearer_token(credentials: HTTPAuthorizationCredentials | str | None) -> str | None:
+    if credentials is None:
+        return None
+    if isinstance(credentials, str):
+        scheme, _, token = credentials.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise _invalid_auth_exception()
+        return token
+    if credentials.scheme.lower() != "bearer" or not credentials.credentials:
+        raise _invalid_auth_exception()
+    return credentials.credentials
 
 
 def _display_name_from_claims(principal: Principal) -> str | None:

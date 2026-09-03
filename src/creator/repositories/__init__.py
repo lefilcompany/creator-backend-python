@@ -1,5 +1,10 @@
 from creator.repositories.common import JsonObject, Page, PageRequest, SortDirection
-from creator.repositories.content import ContentFilters, ContentRecord, ContentRepository
+from creator.repositories.content import (
+    ContentFilters,
+    ContentRecord,
+    ContentRepository,
+    GeneratedTextContentRecord,
+)
 from creator.repositories.image_generation import (
     GenerationHistoryFilters,
     GenerationJobRecord,
@@ -17,6 +22,7 @@ __all__ = [
     "ContentFilters",
     "ContentRecord",
     "ContentRepository",
+    "GeneratedTextContentRecord",
     "GenerationHistoryFilters",
     "GenerationJobRecord",
     "GenerationJobStatusEventRecord",
