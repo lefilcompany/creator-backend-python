@@ -353,6 +353,7 @@ def create_app() -> FastAPI:
         methods=["POST"],
         dependencies=api_dependencies,
     )
+
     @application.post("/api/v1/images/generate")
     def generate_image(
         payload: GenerateImageRequest,

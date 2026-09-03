@@ -284,9 +284,7 @@ def status_record(
             "style": "photographic",
             "idempotency": {
                 "request_fingerprint": request_fingerprint
-                or image_generation_request_fingerprint(
-                    content_id=content_id, style="photographic"
-                )
+                or image_generation_request_fingerprint(content_id=content_id, style="photographic")
             },
         },
         image=image,
