@@ -45,8 +45,7 @@ class GenerateContentRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=255)
     audience: str = Field(min_length=1, max_length=255)
     tone: (
-        Literal["professional", "friendly", "persuasive", "educational", "formal", "casual"]
-        | None
+        Literal["professional", "friendly", "persuasive", "educational", "formal", "casual"] | None
     ) = None
     content_type: Literal[
         "social_post",
@@ -65,8 +64,7 @@ class SettingsUpdateRequest(BaseModel):
     brand_name: str | None = Field(default=None, max_length=255)
     segment: str | None = Field(default=None, max_length=255)
     tone: (
-        Literal["professional", "friendly", "persuasive", "educational", "formal", "casual"]
-        | None
+        Literal["professional", "friendly", "persuasive", "educational", "formal", "casual"] | None
     ) = None
     voice: str | None = Field(default=None, min_length=1, max_length=1_000)
     visual_style: Literal["photographic", "illustration", "product_render"] | None = None
