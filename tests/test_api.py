@@ -22,14 +22,20 @@ from creator.infrastructure.auth import AuthLoginRejectedError, AuthSignupReject
 from creator.integrations.gemini.exceptions import GeminiTimeoutError
 from creator.main import app, create_app
 from creator.repositories import (
+    AssetRecord,
+    BrandRecord,
+    BrandSettingsRecord,
     ContentRecord,
     GeneratedTextContentRecord,
     GenerationJobRecord,
+    GenerationRecord,
     ImageGenerationStatusRecord,
     ImageRecord,
     Page,
+    ProjectRecord,
     SettingsRecord,
     UserRecord,
+    WorkspaceRecord,
 )
 from creator.repositories.common import PageRequest
 from creator.services.storage.provider import StorageUrlError
@@ -65,6 +71,15 @@ def authorized_app() -> object:
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         deleted_at=None,
+    )
+    return application
+
+
+def admin_app() -> object:
+    application = authenticated_app()
+    application.dependency_overrides[get_current_user] = lambda: user_record(
+        UUID("00000000-0000-0000-0000-000000000001"),
+        global_role="admin",
     )
     return application
 
@@ -125,6 +140,13 @@ class FakeContentRepository:
         self.requests: list[dict[str, UUID]] = []
         self.workspace_requests: list[dict[str, UUID]] = []
         self.created_text_generations: list[dict[str, object]] = []
+        self.created: list[dict[str, object]] = []
+        self.updated: list[dict[str, object]] = []
+        self.deleted: list[UUID] = []
+
+    def add(self, **kwargs: object) -> ContentRecord:
+        self.created.append(kwargs)
+        return content_record(UUID("21000000-0000-0000-0000-000000000001"))
 
     def get_by_id_for_user(self, *, user_id: UUID, content_id: UUID) -> ContentRecord | None:
         self.requests.append({"user_id": user_id, "content_id": content_id})
@@ -160,19 +182,55 @@ class FakeContentRepository:
         *,
         user_id: UUID,
         page: PageRequest,
+        filters: object | None = None,
     ) -> Page[ContentRecord]:
         if self.page is not None:
             return self.page
         return Page(items=[], total=0, page=page.page, limit=page.limit)
+
+    def update(self, content_id: UUID, **kwargs: object) -> ContentRecord:
+        self.updated.append({"content_id": content_id, **kwargs})
+        return content_record(content_id)
+
+    def soft_delete(self, content_id: UUID) -> None:
+        self.deleted.append(content_id)
 
 
 class FakeSettingsRepository:
     def __init__(self, settings: SettingsRecord | None = None) -> None:
         self.settings = settings
         self.requests: list[UUID] = []
+        self.created: list[UUID] = []
+        self.updated: list[dict[str, object]] = []
 
     def get_by_user_id(self, user_id: UUID) -> SettingsRecord | None:
         self.requests.append(user_id)
+        return self.settings
+
+    def get_or_create_for_user(self, user_id: UUID) -> SettingsRecord:
+        self.requests.append(user_id)
+        if self.settings is None:
+            self.settings = settings_record()
+            self.created.append(user_id)
+        return self.settings
+
+    def update_partial(self, user_id: UUID, changes: dict[str, object]) -> SettingsRecord:
+        self.updated.append({"user_id": user_id, "changes": changes})
+        current = self.settings or settings_record()
+        self.settings = SettingsRecord(
+            id=current.id,
+            user_id=current.user_id,
+            brand_name=changes.get("brand_name", current.brand_name),  # type: ignore[arg-type]
+            segment=changes.get("segment", current.segment),  # type: ignore[arg-type]
+            tone=str(changes.get("tone", current.tone)),
+            voice=str(changes.get("voice", current.voice)),
+            visual_style=str(changes.get("visual_style", current.visual_style)),
+            default_preferences=changes.get(  # type: ignore[arg-type]
+                "default_preferences", current.default_preferences
+            ),
+            created_at=current.created_at,
+            updated_at=datetime.now(UTC),
+        )
         return self.settings
 
 
@@ -218,6 +276,91 @@ class FakeImageGenerationRepository:
         return self.status
 
 
+class FakeUserRepository:
+    def __init__(self) -> None:
+        self.user = user_record(UUID("00000000-0000-0000-0000-000000000002"))
+        self.deleted: list[UUID] = []
+
+    def add(self, **kwargs: object) -> UserRecord:
+        return UserRecord(
+            id=UUID("00000000-0000-0000-0000-000000000003"),
+            external_id=str(kwargs["external_id"]),
+            email=kwargs.get("email") if isinstance(kwargs.get("email"), str) else None,
+            display_name=kwargs.get("display_name")
+            if isinstance(kwargs.get("display_name"), str)
+            else None,
+            global_role=str(kwargs.get("global_role", "membro")),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            deleted_at=None,
+        )
+
+    def list(self, *, page: PageRequest, include_deleted: bool = False) -> Page[UserRecord]:
+        return Page(items=[self.user], total=1, page=page.page, limit=page.limit)
+
+    def get_by_id(self, user_id: UUID, *, include_deleted: bool = False) -> UserRecord | None:
+        return self.user if user_id == self.user.id else None
+
+    def update(self, user_id: UUID, **kwargs: object) -> UserRecord:
+        return user_record(user_id, global_role=str(kwargs.get("global_role") or "membro"))
+
+    def soft_delete(self, user_id: UUID) -> None:
+        self.deleted.append(user_id)
+
+
+class FakeWorkspaceRepository:
+    def __init__(self, *, writable: bool = True) -> None:
+        self.writable = writable
+        self.workspace = workspace_record(UUID("10000000-0000-0000-0000-000000000001"))
+
+    def user_has_workspace_role(
+        self, *, user_id: UUID, workspace_id: UUID, minimum_role: str = "viewer"
+    ) -> bool:
+        return self.writable
+
+    def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord:
+        return workspace_record(UUID("10000000-0000-0000-0000-000000000002"), name=name)
+
+    def list_for_user(self, *, user_id: UUID, page: PageRequest) -> Page[WorkspaceRecord]:
+        return Page(items=[self.workspace], total=1, page=page.page, limit=page.limit)
+
+    def get_for_user(
+        self, *, user_id: UUID, workspace_id: UUID, include_deleted: bool = False
+    ) -> WorkspaceRecord | None:
+        return self.workspace if workspace_id == self.workspace.id else None
+
+    def update(self, *, user_id: UUID, workspace_id: UUID, name: str) -> WorkspaceRecord:
+        return workspace_record(workspace_id, name=name)
+
+    def soft_delete(self, *, user_id: UUID, workspace_id: UUID) -> None:
+        return None
+
+
+class FakeCrudRepository:
+    def __init__(self, record: object) -> None:
+        self.record = record
+        self.created: list[dict[str, object]] = []
+
+    def add(self, **kwargs: object) -> object:
+        self.created.append(kwargs)
+        return self.record
+
+    def get_for_user(self, **kwargs: object) -> object:
+        return self.record
+
+    def list_for_user(self, *, page: PageRequest, **kwargs: object) -> Page[object]:
+        return Page(items=[self.record], total=1, page=page.page, limit=page.limit)
+
+    def update(self, **kwargs: object) -> object:
+        return self.record
+
+    def soft_delete(self, **kwargs: object) -> None:
+        return None
+
+    def upsert(self, **kwargs: object) -> object:
+        return self.record
+
+
 class FakeUnitOfWork:
     def __init__(
         self,
@@ -230,12 +373,19 @@ class FakeUnitOfWork:
         status: ImageGenerationStatusRecord | None = None,
         existing: ImageGenerationStatusRecord | None = None,
     ) -> None:
+        self.users = FakeUserRepository()
+        self.workspaces = FakeWorkspaceRepository(writable=workspace_access)
+        self.brands = FakeCrudRepository(brand_record())
+        self.projects = FakeCrudRepository(project_record())
         self.contents = FakeContentRepository(
             content,
             page=content_page,
             workspace_access=workspace_access,
             create_error=content_create_error,
         )
+        self.generations = FakeCrudRepository(generation_record())
+        self.assets = FakeCrudRepository(asset_record())
+        self.brand_settings = FakeCrudRepository(brand_settings_record())
         self.settings = FakeSettingsRepository(settings_record)
         self.image_generations = FakeImageGenerationRepository(status=status, existing=existing)
         self.commits = 0
@@ -325,6 +475,114 @@ def content_record(content_id: UUID) -> ContentRecord:
     )
 
 
+def user_record(user_id: UUID, *, global_role: str = "membro") -> UserRecord:
+    return UserRecord(
+        id=user_id,
+        external_id=f"principal-{user_id}",
+        email="user@example.com",
+        display_name="User Example",
+        global_role=global_role,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def workspace_record(workspace_id: UUID, *, name: str = "Workspace") -> WorkspaceRecord:
+    return WorkspaceRecord(
+        id=workspace_id,
+        name=name,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def brand_record() -> BrandRecord:
+    return BrandRecord(
+        id=UUID("31000000-0000-0000-0000-000000000001"),
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        created_by_user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        name="Lefil",
+        description="Brand description",
+        brand_voice="Clear",
+        metadata={"segment": "creator"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def project_record() -> ProjectRecord:
+    return ProjectRecord(
+        id=UUID("32000000-0000-0000-0000-000000000001"),
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        brand_id=UUID("31000000-0000-0000-0000-000000000001"),
+        created_by_user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        name="Launch",
+        description="Launch project",
+        status="ACTIVE",
+        metadata={"channel": "email"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def generation_record() -> GenerationRecord:
+    return GenerationRecord(
+        id=UUID("33000000-0000-0000-0000-000000000001"),
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        content_id=UUID("21000000-0000-0000-0000-000000000001"),
+        brand_id=UUID("31000000-0000-0000-0000-000000000001"),
+        project_id=UUID("32000000-0000-0000-0000-000000000001"),
+        requested_by_user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        generation_type="TEXT",
+        model="gemini-2.5-flash",
+        prompt="Write launch copy",
+        parameters={"temperature": 0.7},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def asset_record() -> AssetRecord:
+    return AssetRecord(
+        id=UUID("34000000-0000-0000-0000-000000000001"),
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        brand_id=UUID("31000000-0000-0000-0000-000000000001"),
+        project_id=UUID("32000000-0000-0000-0000-000000000001"),
+        content_id=UUID("21000000-0000-0000-0000-000000000001"),
+        uploaded_by_user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        asset_type="image",
+        storage_path="workspaces/ws/assets/a.png",
+        public_url="https://example.com/a.png",
+        mime_type="image/png",
+        byte_size=123,
+        checksum="sha256:abc",
+        metadata={"alt": "asset"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
+def brand_settings_record() -> BrandSettingsRecord:
+    return BrandSettingsRecord(
+        id=UUID("35000000-0000-0000-0000-000000000001"),
+        workspace_id=UUID("10000000-0000-0000-0000-000000000001"),
+        brand_id=UUID("31000000-0000-0000-0000-000000000001"),
+        voice_settings={"tone": "clear"},
+        visual_settings={"colors": ["#111111"]},
+        generation_defaults={"temperature": 0.7},
+        metadata={"source": "test"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=None,
+    )
+
+
 def text_content_record(content_id: UUID) -> ContentRecord:
     return ContentRecord(
         id=content_id,
@@ -348,11 +606,24 @@ def text_content_record(content_id: UUID) -> ContentRecord:
     )
 
 
-def settings_record(preferences: dict[str, object]) -> SettingsRecord:
+def settings_record(
+    *,
+    brand_name: str | None = "Lefil",
+    segment: str | None = "marketing",
+    tone: str = "professional",
+    voice: str = "Clear and useful",
+    visual_style: str = "photographic",
+    default_preferences: dict[str, object] | None = None,
+) -> SettingsRecord:
     return SettingsRecord(
         id=UUID("90000000-0000-0000-0000-000000000001"),
         user_id=UUID("00000000-0000-0000-0000-000000000001"),
-        preferences=preferences,
+        brand_name=brand_name,
+        segment=segment,
+        tone=tone,
+        voice=voice,
+        visual_style=visual_style,
+        default_preferences=default_preferences or {},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
@@ -470,9 +741,292 @@ async def test_live_health_returns_contract_envelope() -> None:
 
 
 @pytest.mark.anyio
+async def test_user_admin_crud_routes_return_envelopes() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = admin_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    user_id = "00000000-0000-0000-0000-000000000002"
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        list_response = await client.get("/api/v1/users")
+        create_response = await client.post(
+            "/api/v1/users",
+            json={
+                "external_id": "supabase:new",
+                "email": "new@example.com",
+                "display_name": "New User",
+                "global_role": "gestor",
+            },
+        )
+        get_response = await client.get(f"/api/v1/users/{user_id}")
+        update_response = await client.put(
+            f"/api/v1/users/{user_id}",
+            json={"display_name": "Updated", "global_role": "admin"},
+        )
+        delete_response = await client.delete(f"/api/v1/users/{user_id}")
+
+    assert list_response.status_code == 200
+    assert create_response.status_code == 201
+    assert get_response.status_code == 200
+    assert update_response.json()["data"]["global_role"] == "admin"
+    assert delete_response.json()["data"] == {"deleted": True}
+    assert unit_of_work.commits == 3
+
+
+@pytest.mark.anyio
+async def test_get_settings_creates_default_for_authenticated_user() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/settings")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["user_id"] == "00000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["tone"] == "professional"
+    assert response.json()["data"]["voice"] == "Clear and useful"
+    assert response.json()["data"]["visual_style"] == "photographic"
+    assert unit_of_work.settings.created == [UUID("00000000-0000-0000-0000-000000000001")]
+    assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_patch_settings_updates_only_sent_fields() -> None:
+    unit_of_work = FakeUnitOfWork(
+        settings_record=settings_record(
+            brand_name="Lefil",
+            segment="agency",
+            default_preferences={"locale": "pt-BR"},
+        )
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.patch(
+            "/api/v1/settings",
+            json={"segment": "SaaS", "tone": "friendly"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["brand_name"] == "Lefil"
+    assert response.json()["data"]["segment"] == "SaaS"
+    assert response.json()["data"]["tone"] == "friendly"
+    assert response.json()["data"]["default_preferences"] == {"locale": "pt-BR"}
+    assert unit_of_work.settings.updated == [
+        {
+            "user_id": UUID("00000000-0000-0000-0000-000000000001"),
+            "changes": {"segment": "SaaS", "tone": "friendly"},
+        }
+    ]
+    assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_patch_settings_returns_standard_validation_error() -> None:
+    application = authorized_app()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.patch("/api/v1/settings", json={"tone": "urgent"})
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.anyio
+async def test_workspace_crud_routes_are_scoped_to_current_user() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    workspace_id = "10000000-0000-0000-0000-000000000001"
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        list_response = await client.get("/api/v1/workspaces")
+        create_response = await client.post("/api/v1/workspaces", json={"name": "Growth"})
+        get_response = await client.get(f"/api/v1/workspaces/{workspace_id}")
+        update_response = await client.put(
+            f"/api/v1/workspaces/{workspace_id}",
+            json={"name": "Updated Growth"},
+        )
+        delete_response = await client.delete(f"/api/v1/workspaces/{workspace_id}")
+
+    assert list_response.json()["data"]["pagination"]["total"] == 1
+    assert create_response.status_code == 201
+    assert get_response.json()["data"]["id"] == workspace_id
+    assert update_response.json()["data"]["name"] == "Updated Growth"
+    assert delete_response.json()["data"] == {"deleted": True}
+    assert unit_of_work.commits == 3
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("base_path", "payload", "expected_field"),
+    [
+        (
+            "/api/v1/brands",
+            {
+                "workspace_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Lefil",
+                "description": "Brand",
+                "brand_voice": "Clear",
+                "metadata": {"segment": "creator"},
+            },
+            "name",
+        ),
+        (
+            "/api/v1/projects",
+            {
+                "workspace_id": "10000000-0000-0000-0000-000000000001",
+                "brand_id": "31000000-0000-0000-0000-000000000001",
+                "name": "Launch",
+                "description": "Project",
+                "status": "ACTIVE",
+                "metadata": {"channel": "email"},
+            },
+            "status",
+        ),
+        (
+            "/api/v1/contents",
+            {
+                "workspace_id": "10000000-0000-0000-0000-000000000001",
+                "brand_id": "31000000-0000-0000-0000-000000000001",
+                "project_id": "32000000-0000-0000-0000-000000000001",
+                "type": "TEXT",
+                "title": "Launch copy",
+                "payload": {"text": "hello"},
+            },
+            "title",
+        ),
+        (
+            "/api/v1/generations",
+            {
+                "workspace_id": "10000000-0000-0000-0000-000000000001",
+                "content_id": "21000000-0000-0000-0000-000000000001",
+                "brand_id": "31000000-0000-0000-0000-000000000001",
+                "project_id": "32000000-0000-0000-0000-000000000001",
+                "type": "TEXT",
+                "model": "gemini-2.5-flash",
+                "prompt": "Write",
+                "parameters": {"temperature": 0.7},
+            },
+            "model",
+        ),
+        (
+            "/api/v1/assets",
+            {
+                "workspace_id": "10000000-0000-0000-0000-000000000001",
+                "brand_id": "31000000-0000-0000-0000-000000000001",
+                "project_id": "32000000-0000-0000-0000-000000000001",
+                "content_id": "21000000-0000-0000-0000-000000000001",
+                "asset_type": "image",
+                "storage_path": "workspaces/ws/assets/a.png",
+                "public_url": "https://example.com/a.png",
+                "mime_type": "image/png",
+                "byte_size": 123,
+                "checksum": "sha256:abc",
+                "metadata": {"alt": "asset"},
+            },
+            "asset_type",
+        ),
+    ],
+)
+async def test_core_resource_crud_routes_return_envelopes(
+    base_path: str,
+    payload: dict[str, object],
+    expected_field: str,
+) -> None:
+    unit_of_work = FakeUnitOfWork(
+        content=content_record(UUID("21000000-0000-0000-0000-000000000001"))
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        list_response = await client.get(base_path)
+        create_response = await client.post(base_path, json=payload)
+        resource_id = create_response.json()["data"]["id"]
+        get_response = await client.get(f"{base_path}/{resource_id}")
+        update_response = await client.put(f"{base_path}/{resource_id}", json={})
+        delete_response = await client.delete(f"{base_path}/{resource_id}")
+
+    assert list_response.status_code == 200
+    assert create_response.status_code == 201
+    assert get_response.status_code == 200
+    assert expected_field in update_response.json()["data"]
+    assert delete_response.json()["data"] == {"deleted": True}
+    assert unit_of_work.commits == 3
+
+
+@pytest.mark.anyio
+async def test_brand_settings_crud_routes_use_brand_subresource() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    brand_id = "31000000-0000-0000-0000-000000000001"
+    payload = {
+        "workspace_id": "10000000-0000-0000-0000-000000000001",
+        "voice_settings": {"tone": "clear"},
+        "visual_settings": {"colors": ["#111111"]},
+        "generation_defaults": {"temperature": 0.7},
+        "metadata": {"source": "test"},
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        get_response = await client.get(f"/api/v1/brands/{brand_id}/settings")
+        upsert_response = await client.put(f"/api/v1/brands/{brand_id}/settings", json=payload)
+        update_response = await client.patch(
+            f"/api/v1/brands/{brand_id}/settings",
+            json={"voice_settings": {"tone": "warm"}},
+        )
+        delete_response = await client.delete(f"/api/v1/brands/{brand_id}/settings")
+
+    assert get_response.json()["data"]["brand_id"] == brand_id
+    assert upsert_response.status_code == 200
+    assert update_response.json()["data"]["voice_settings"] == {"tone": "clear"}
+    assert delete_response.json()["data"] == {"deleted": True}
+    assert unit_of_work.commits == 3
+
+
+@pytest.mark.anyio
+async def test_core_resource_create_rejects_non_writable_workspace() -> None:
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork(workspace_access=False)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/brands",
+            json={
+                "workspace_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Blocked",
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "WORKSPACE_ACCESS_DENIED"
+
+
+@pytest.mark.anyio
 async def test_generate_content_persists_text_content() -> None:
     unit_of_work = FakeUnitOfWork(
-        settings_record=settings_record({"locale": "pt-BR", "brand": "Lefil"})
+        settings_record=settings_record(default_preferences={"locale": "pt-BR", "brand": "Lefil"})
     )
     llm_provider = FakeLLMProvider(output="Generated launch copy")
     application = authorized_app()
@@ -502,6 +1056,30 @@ async def test_generate_content_persists_text_content() -> None:
     assert created["model"] == "gemini-2.5-flash"
     assert created["parameters"]["prompt_template"]["id"] == "content.generation.v1"
     assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_generate_content_uses_settings_defaults_when_request_omits_fields() -> None:
+    unit_of_work = FakeUnitOfWork(
+        settings_record=settings_record(tone="friendly", voice="Warm and practical")
+    )
+    llm_provider = FakeLLMProvider(output="Generated launch copy")
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
+    payload = generate_content_payload()
+    del payload["tone"]
+    del payload["brand_voice"]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/content/generate", json=payload)
+
+    assert response.status_code == 200
+    created = unit_of_work.contents.created_text_generations[0]
+    assert created["payload"]["request"]["tone"] == "friendly"
+    assert created["payload"]["request"]["brand_voice"] == "Warm and practical"
 
 
 @pytest.mark.anyio
@@ -814,6 +1392,36 @@ async def test_generate_image_returns_accepted_job_and_enqueues_work() -> None:
     assert created["parameters"]["prompt_template"]["id"] == "image.advertising.v1"
     assert "request_fingerprint" in created["parameters"]["idempotency"]
     assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_generate_image_uses_settings_default_style_when_request_omits_style() -> None:
+    content_id = UUID("20000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork(
+        content=content_record(content_id),
+        settings_record=settings_record(visual_style="illustration"),
+    )
+    queue = FakeGenerationQueue()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: queue
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/images/generate",
+            headers={"Idempotency-Key": "idem-1"},
+            json={"content_id": str(content_id)},
+        )
+
+    assert response.status_code == 202
+    created = unit_of_work.image_generations.created[0]
+    assert created["parameters"]["style"] == "illustration"
+    assert created["parameters"]["idempotency"]["request_fingerprint"] == (
+        image_generation_request_fingerprint(content_id=content_id, style="illustration")
+    )
+    assert "illustration" in str(created["prompt"])
 
 
 @pytest.mark.anyio

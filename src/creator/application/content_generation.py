@@ -28,9 +28,9 @@ class GenerateContentCommand:
     workspace_id: UUID
     topic: str
     audience: str
-    tone: str
+    tone: str | None
     content_type: str
-    brand_voice: str
+    brand_voice: str | None
 
 
 def generate_content(
@@ -48,8 +48,23 @@ def generate_content(
         raise WorkspaceAccessDeniedError("Workspace access denied")
 
     stored_settings = unit_of_work.settings.get_by_user_id(user.id)
-    settings_preferences = stored_settings.preferences if stored_settings else {}
-    request_payload = _request_payload(command)
+    settings_preferences = (
+        {
+            "brand_name": stored_settings.brand_name,
+            "segment": stored_settings.segment,
+            "tone": stored_settings.tone,
+            "voice": stored_settings.voice,
+            "visual_style": stored_settings.visual_style,
+            "default_preferences": stored_settings.default_preferences,
+        }
+        if stored_settings
+        else {}
+    )
+    request_payload = _request_payload(
+        command,
+        default_tone=stored_settings.tone if stored_settings else "professional",
+        default_brand_voice=stored_settings.voice if stored_settings else "Clear and useful",
+    )
     rendered_prompt = build_content_generation_prompt(
         context={
             "workspace_id": str(command.workspace_id),
@@ -102,11 +117,16 @@ def generate_content(
     return generated
 
 
-def _request_payload(command: GenerateContentCommand) -> dict[str, object]:
+def _request_payload(
+    command: GenerateContentCommand,
+    *,
+    default_tone: str,
+    default_brand_voice: str,
+) -> dict[str, object]:
     return {
         "topic": command.topic,
         "audience": command.audience,
-        "tone": command.tone,
+        "tone": command.tone or default_tone,
         "content_type": command.content_type,
-        "brand_voice": command.brand_voice,
+        "brand_voice": command.brand_voice or default_brand_voice,
     }

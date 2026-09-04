@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from creator.repositories.common import Page, PageRequest
+
 
 @dataclass(frozen=True, slots=True)
 class UserRecord:
@@ -34,12 +36,25 @@ class UserRepository(Protocol):
         self, external_id: str, *, include_deleted: bool = False
     ) -> UserRecord | None: ...
 
+    def list(
+        self, *, include_deleted: bool = False, page: PageRequest | None = None
+    ) -> Page[UserRecord]: ...
+
     def update_profile(
         self,
         user_id: UUID,
         *,
         email: str | None = None,
         display_name: str | None = None,
+    ) -> UserRecord: ...
+
+    def update(
+        self,
+        user_id: UUID,
+        *,
+        email: str | None = None,
+        display_name: str | None = None,
+        global_role: str | None = None,
     ) -> UserRecord: ...
 
     def soft_delete(self, user_id: UUID) -> None: ...

@@ -16,10 +16,16 @@ from creator.domain.exceptions import (
 from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure import models
 from creator.infrastructure.dtos import (
+    SqlAlchemyAssetRepository,
+    SqlAlchemyBrandRepository,
+    SqlAlchemyBrandSettingsRepository,
     SqlAlchemyContentRepository,
+    SqlAlchemyGenerationRepository,
     SqlAlchemyImageGenerationRepository,
+    SqlAlchemyProjectRepository,
     SqlAlchemySettingsRepository,
     SqlAlchemyUserRepository,
+    SqlAlchemyWorkspaceRepository,
     flush_or_raise,
 )
 from creator.repositories import (
@@ -110,6 +116,19 @@ class FakeSession:
             row.generation_type = models.GenerationType.IMAGE
         if isinstance(row, models.User) and row.global_role is None:
             row.global_role = models.GlobalRole.MEMBRO
+        if isinstance(row, models.Project) and row.status is None:
+            row.status = "ACTIVE"
+        for field_name in [
+            "metadata_json",
+            "voice_settings",
+            "visual_settings",
+            "generation_defaults",
+            "default_preferences",
+            "payload",
+            "parameters",
+        ]:
+            if hasattr(row, field_name) and getattr(row, field_name, None) is None:
+                setattr(row, field_name, {})
 
 
 def fake_session(session: FakeSession) -> Session:
@@ -132,16 +151,64 @@ def workspace_row() -> models.Workspace:
     return models.Workspace(id=uuid4(), name="Workspace", created_at=NOW, updated_at=NOW)
 
 
+def membership_row(user: models.User, workspace: models.Workspace) -> models.WorkspaceMembership:
+    return models.WorkspaceMembership(
+        id=uuid4(),
+        workspace_id=workspace.id,
+        user_id=user.id,
+        role=models.WorkspaceRole.OWNER,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
+def brand_row(
+    *,
+    workspace_id: UUID | None = None,
+    user_id: UUID | None = None,
+) -> models.Brand:
+    return models.Brand(
+        id=uuid4(),
+        workspace_id=workspace_id or uuid4(),
+        created_by_user_id=user_id or uuid4(),
+        name="Brand",
+        description="Description",
+        brand_voice="Voice",
+        metadata_json={"segment": "creator"},
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
+def project_row(brand: models.Brand) -> models.Project:
+    return models.Project(
+        id=uuid4(),
+        workspace_id=brand.workspace_id,
+        brand_id=brand.id,
+        created_by_user_id=brand.created_by_user_id,
+        name="Project",
+        description="Description",
+        status="ACTIVE",
+        metadata_json={"channel": "email"},
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
 def content_row(
     *,
     content_id: UUID | None = None,
     workspace_id: UUID | None = None,
     user_id: UUID | None = None,
+    brand_id: UUID | None = None,
+    project_id: UUID | None = None,
 ) -> models.Content:
     return models.Content(
         id=content_id or uuid4(),
         workspace_id=workspace_id or uuid4(),
         created_by_user_id=user_id or uuid4(),
+        brand_id=brand_id,
+        project_id=project_id,
         content_type=models.ContentType.IMAGE,
         title="Content",
         payload={"kind": "image"},
@@ -155,11 +222,47 @@ def generation_row(content: models.Content) -> models.Generation:
         id=uuid4(),
         workspace_id=content.workspace_id,
         content_id=content.id,
+        brand_id=content.brand_id,
+        project_id=content.project_id,
         requested_by_user_id=content.created_by_user_id,
         generation_type=models.GenerationType.IMAGE,
         model="gemini-image",
         prompt="Generate",
         parameters={},
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
+def asset_row(content: models.Content) -> models.Asset:
+    return models.Asset(
+        id=uuid4(),
+        workspace_id=content.workspace_id,
+        brand_id=content.brand_id,
+        project_id=content.project_id,
+        content_id=content.id,
+        uploaded_by_user_id=content.created_by_user_id,
+        asset_type="image",
+        storage_path=f"{content.workspace_id}/{uuid4()}.png",
+        public_url="https://example.com/asset.png",
+        mime_type="image/png",
+        byte_size=123,
+        checksum="sha256:abc",
+        metadata_json={"source": "test"},
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
+def brand_settings_row(brand: models.Brand) -> models.BrandSettings:
+    return models.BrandSettings(
+        id=uuid4(),
+        workspace_id=brand.workspace_id,
+        brand_id=brand.id,
+        voice_settings={"tone": "clear"},
+        visual_settings={"colors": ["#111111"]},
+        generation_defaults={"temperature": 0.7},
+        metadata_json={"source": "test"},
         created_at=NOW,
         updated_at=NOW,
     )
@@ -238,23 +341,35 @@ def test_settings_repository_get_create_upsert_and_update() -> None:
     session.scalars_results.append(ScalarResult(None))
     assert repository.get_by_user_id(user_id) is None
 
-    created = repository.create_for_user(user_id, preferences={"locale": "pt-BR"})
-    assert created.preferences == {"locale": "pt-BR"}
+    created = repository.create_for_user(
+        user_id,
+        brand_name="Lefil",
+        segment="marketing",
+        default_preferences={"locale": "pt-BR"},
+    )
+    assert created.brand_name == "Lefil"
+    assert created.default_preferences == {"locale": "pt-BR"}
 
     existing = models.Settings(
         id=uuid4(),
         user_id=user_id,
-        preferences={"locale": "pt-BR"},
+        brand_name="Lefil",
+        segment="marketing",
+        tone="professional",
+        voice="Clear and useful",
+        visual_style="photographic",
+        default_preferences={"locale": "pt-BR"},
         created_at=NOW,
         updated_at=NOW,
     )
     session.scalars_results.append(ScalarResult(existing))
-    upserted = repository.upsert_preferences(user_id, {"locale": "en-US"})
-    assert upserted.preferences == {"locale": "en-US"}
+    stored = repository.get_or_create_for_user(user_id)
+    assert stored.brand_name == "Lefil"
 
     session.scalars_results.append(ScalarResult(existing))
-    updated = repository.update_preferences(user_id, {"density": "compact"})
-    assert updated.preferences == {"density": "compact"}
+    updated = repository.update_partial(user_id, {"segment": "SaaS"})
+    assert updated.brand_name == "Lefil"
+    assert updated.segment == "SaaS"
 
 
 def test_settings_repository_raises_for_missing_update() -> None:
@@ -262,7 +377,171 @@ def test_settings_repository_raises_for_missing_update() -> None:
     session.scalars_results.append(ScalarResult(None))
 
     with pytest.raises(EntityNotFoundError):
-        SqlAlchemySettingsRepository(fake_session(session)).update_preferences(uuid4(), {})
+        SqlAlchemySettingsRepository(fake_session(session)).update_partial(uuid4(), {})
+
+
+def test_workspace_repository_crud_and_role_checks() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyWorkspaceRepository(fake_session(session))
+    user = user_row()
+    workspace = workspace_row()
+    membership = membership_row(user, workspace)
+
+    created = repository.add(name="Created Workspace", owner_user_id=user.id)
+    assert created.name == "Created Workspace"
+
+    session.scalars_results.append(ScalarResult(workspace))
+    assert repository.get_for_user(user_id=user.id, workspace_id=workspace.id) is not None
+
+    session.scalars_results.append(ScalarResult(values=[workspace]))
+    session.execute_results.append(ExecuteResult(1))
+    page = repository.list_for_user(user_id=user.id, page=PageRequest(page=1, limit=10))
+    assert page.total == 1
+
+    session.scalars_results.append(ScalarResult(membership))
+    session.get_results.append(workspace)
+    assert repository.update(user_id=user.id, workspace_id=workspace.id, name="Updated").name == (
+        "Updated"
+    )
+
+    session.scalars_results.append(ScalarResult(membership))
+    assert repository.user_has_workspace_role(
+        user_id=user.id,
+        workspace_id=workspace.id,
+        minimum_role="editor",
+    )
+
+
+def test_brand_project_asset_generation_and_settings_repositories_crud_paths() -> None:
+    session = FakeSession()
+    user = user_row()
+    workspace = workspace_row()
+    membership = membership_row(user, workspace)
+    brand = brand_row(workspace_id=workspace.id, user_id=user.id)
+    project = project_row(brand)
+    content = content_row(
+        workspace_id=workspace.id,
+        user_id=user.id,
+        brand_id=brand.id,
+        project_id=project.id,
+    )
+    generation = generation_row(content)
+    asset = asset_row(content)
+    settings = brand_settings_row(brand)
+
+    brand_repository = SqlAlchemyBrandRepository(fake_session(session))
+    session.scalars_results.append(ScalarResult(membership))
+    created_brand = brand_repository.add(
+        workspace_id=workspace.id,
+        created_by_user_id=user.id,
+        name="Created Brand",
+        metadata={"source": "test"},
+    )
+    assert created_brand.name == "Created Brand"
+
+    session.scalars_results.append(ScalarResult(values=[brand]))
+    session.execute_results.append(ExecuteResult(1))
+    assert brand_repository.list_for_user(user_id=user.id).total == 1
+
+    session.scalars_results.extend([ScalarResult(brand), ScalarResult(membership)])
+    assert brand_repository.update(user_id=user.id, brand_id=brand.id, name="Updated").name == (
+        "Updated"
+    )
+
+    project_repository = SqlAlchemyProjectRepository(fake_session(session))
+    session.scalars_results.append(ScalarResult(membership))
+    assert (
+        project_repository.add(
+            workspace_id=workspace.id,
+            brand_id=brand.id,
+            created_by_user_id=user.id,
+            name="Created Project",
+        ).workspace_id
+        == workspace.id
+    )
+
+    session.scalars_results.append(ScalarResult(values=[project]))
+    session.execute_results.append(ExecuteResult(1))
+    assert project_repository.list_for_user(user_id=user.id, brand_id=brand.id).total == 1
+
+    session.scalars_results.extend([ScalarResult(project), ScalarResult(membership)])
+    assert (
+        project_repository.update(
+            user_id=user.id,
+            project_id=project.id,
+            status="ARCHIVED",
+        ).status
+        == "ARCHIVED"
+    )
+
+    generation_repository = SqlAlchemyGenerationRepository(fake_session(session))
+    session.scalars_results.append(ScalarResult(membership))
+    assert (
+        generation_repository.add(
+            workspace_id=workspace.id,
+            content_id=content.id,
+            requested_by_user_id=user.id,
+            model="gemini",
+            prompt="Generate",
+            brand_id=brand.id,
+            project_id=project.id,
+        ).content_id
+        == content.id
+    )
+
+    session.scalars_results.extend([ScalarResult(generation), ScalarResult(membership)])
+    assert generation_repository.update(
+        user_id=user.id,
+        generation_id=generation.id,
+        parameters={"temperature": 1},
+    ).parameters == {"temperature": 1}
+
+    asset_repository = SqlAlchemyAssetRepository(fake_session(session))
+    session.scalars_results.append(ScalarResult(membership))
+    assert (
+        asset_repository.add(
+            workspace_id=workspace.id,
+            uploaded_by_user_id=user.id,
+            asset_type="image",
+            storage_path="workspace/asset.png",
+            mime_type="image/png",
+            byte_size=123,
+            brand_id=brand.id,
+            project_id=project.id,
+            content_id=content.id,
+        ).asset_type
+        == "image"
+    )
+
+    session.scalars_results.append(ScalarResult(values=[asset]))
+    session.execute_results.append(ExecuteResult(1))
+    assert asset_repository.list_for_user(user_id=user.id, content_id=content.id).total == 1
+
+    session.scalars_results.extend([ScalarResult(asset), ScalarResult(membership)])
+    assert asset_repository.update(
+        user_id=user.id,
+        asset_id=asset.id,
+        metadata={"alt": "updated"},
+    ).metadata == {"alt": "updated"}
+
+    settings_repository = SqlAlchemyBrandSettingsRepository(fake_session(session))
+    session.scalars_results.append(ScalarResult(settings))
+    assert settings_repository.get_for_user(user_id=user.id, brand_id=brand.id) is not None
+
+    session.scalars_results.extend([ScalarResult(membership), ScalarResult(None)])
+    assert settings_repository.upsert(
+        user_id=user.id,
+        workspace_id=workspace.id,
+        brand_id=brand.id,
+        voice_settings={"tone": "new"},
+    ).voice_settings == {"tone": "new"}
+
+    session.scalars_results.extend([ScalarResult(settings), ScalarResult(membership)])
+    assert settings_repository.update(
+        user_id=user.id,
+        brand_id=brand.id,
+        visual_settings={"logo": "mark"},
+    ).visual_settings == {"logo": "mark"}
 
 
 def test_content_repository_crud_pagination_and_soft_delete() -> None:

@@ -35,13 +35,15 @@ def submit_image_generation(
     settings: Settings,
     user: UserRecord,
     content_id: UUID,
-    style: str,
+    style: str | None,
     idempotency_key: str,
 ) -> ImageGenerationStatusRecord:
+    stored_settings = unit_of_work.settings.get_by_user_id(user.id)
+    resolved_style = style or (stored_settings.visual_style if stored_settings else "photographic")
     external_id = image_generation_external_id(user.id, idempotency_key)
     request_fingerprint = image_generation_request_fingerprint(
         content_id=content_id,
-        style=style,
+        style=resolved_style,
     )
     existing = unit_of_work.image_generations.get_status_by_external_id_for_user(
         user_id=user.id,
@@ -55,10 +57,23 @@ def submit_image_generation(
     if content is None:
         raise EntityNotFoundError("Content not found")
 
-    rendered_prompt = build_image_generation_prompt(content=content, style=style)
+    rendered_prompt = build_image_generation_prompt(
+        content=content,
+        style=resolved_style,
+        settings_context={
+            "brand_name": stored_settings.brand_name,
+            "segment": stored_settings.segment,
+            "tone": stored_settings.tone,
+            "voice": stored_settings.voice,
+            "visual_style": stored_settings.visual_style,
+            "default_preferences": stored_settings.default_preferences,
+        }
+        if stored_settings
+        else {},
+    )
     parameters = generation_parameters_with_prompt_template(
         {
-            "style": style,
+            "style": resolved_style,
             "idempotency": {"request_fingerprint": request_fingerprint},
         },
         rendered_prompt,
@@ -100,11 +115,17 @@ def submit_image_generation(
     return ImageGenerationStatusRecord(job=job, parameters=generation_parameters)
 
 
-def build_image_generation_prompt(*, content: ContentRecord, style: str) -> RenderedPrompt:
+def build_image_generation_prompt(
+    *,
+    content: ContentRecord,
+    style: str,
+    settings_context: dict[str, object] | None = None,
+) -> RenderedPrompt:
     return build_advertising_image_prompt(
         context={
             "workspace_id": str(content.workspace_id),
             "content_type": content.content_type,
+            "settings": settings_context or {},
         },
         user_input={
             "content_id": str(content.id),

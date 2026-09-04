@@ -3,6 +3,9 @@ from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
 from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.db import Base
 from creator.infrastructure.models import (
+    Asset,
+    Brand,
+    BrandSettings,
     Content,
     ContentType,
     Generation,
@@ -10,6 +13,7 @@ from creator.infrastructure.models import (
     GenerationJobStatusEvent,
     GenerationType,
     Image,
+    Project,
     Settings,
     User,
     Workspace,
@@ -36,8 +40,12 @@ def test_initial_relational_model_tables_are_registered() -> None:
         Settings.__tablename__,
         Workspace.__tablename__,
         WorkspaceMembership.__tablename__,
+        Brand.__tablename__,
+        BrandSettings.__tablename__,
+        Project.__tablename__,
         Content.__tablename__,
         Generation.__tablename__,
+        Asset.__tablename__,
         GenerationJob.__tablename__,
         GenerationJobStatusEvent.__tablename__,
         Image.__tablename__,
@@ -63,8 +71,18 @@ def test_content_and_generation_type_enums_include_text() -> None:
 
 
 def test_settings_and_image_uniqueness_constraints_are_explicit() -> None:
+    settings_columns = Base.metadata.tables["settings"].c
+
     assert "uq_users_external_id" in constraint_names("users", UniqueConstraint)
     assert "uq_settings_user_id" in constraint_names("settings", UniqueConstraint)
+    assert {
+        "brand_name",
+        "segment",
+        "tone",
+        "voice",
+        "visual_style",
+        "default_preferences",
+    } <= set(settings_columns.keys())
     assert "uq_images_generation_id" in constraint_names("images", UniqueConstraint)
     assert "uq_images_storage_path" in constraint_names("images", UniqueConstraint)
     assert "uq_images_active_content_version" in index_names("images")
@@ -113,6 +131,8 @@ def test_workspace_integrity_uses_composite_foreign_keys() -> None:
     job_fks = constraint_names("generation_jobs", ForeignKeyConstraint)
 
     assert "fk_generations_content_workspace" in generation_fks
+    assert "fk_generations_brand_workspace" in generation_fks
+    assert "fk_generations_project_workspace" in generation_fks
     assert "fk_images_content_workspace" in image_fks
     assert "fk_images_generation_workspace_content" in image_fks
     assert "fk_generation_jobs_generation_workspace" in job_fks
@@ -123,8 +143,12 @@ def test_soft_delete_columns_are_on_recoverable_business_tables() -> None:
         "users",
         "workspaces",
         "workspace_memberships",
+        "brands",
+        "brand_settings",
+        "projects",
         "contents",
         "generations",
+        "assets",
         "generation_jobs",
         "images",
     ]:

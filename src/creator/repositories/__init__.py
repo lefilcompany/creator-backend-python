@@ -5,6 +5,18 @@ from creator.repositories.content import (
     ContentRepository,
     GeneratedTextContentRecord,
 )
+from creator.repositories.core import (
+    AssetRecord,
+    AssetRepository,
+    BrandRecord,
+    BrandRepository,
+    BrandSettingsRecord,
+    BrandSettingsRepository,
+    GenerationRecord,
+    GenerationRepository,
+    ProjectRecord,
+    ProjectRepository,
+)
 from creator.repositories.image_generation import (
     GenerationHistoryFilters,
     GenerationJobRecord,
@@ -17,8 +29,19 @@ from creator.repositories.image_generation import (
 )
 from creator.repositories.settings import SettingsRecord, SettingsRepository
 from creator.repositories.user import UserRecord, UserRepository
+from creator.repositories.workspace import (
+    WorkspaceMembershipRecord,
+    WorkspaceRecord,
+    WorkspaceRepository,
+)
 
 __all__ = [
+    "AssetRecord",
+    "AssetRepository",
+    "BrandRecord",
+    "BrandRepository",
+    "BrandSettingsRecord",
+    "BrandSettingsRepository",
     "ContentFilters",
     "ContentRecord",
     "ContentRepository",
@@ -26,6 +49,8 @@ __all__ = [
     "GenerationHistoryFilters",
     "GenerationJobRecord",
     "GenerationJobStatusEventRecord",
+    "GenerationRecord",
+    "GenerationRepository",
     "ImageGenerationStatusRecord",
     "ImageGenerationWorkItem",
     "ImageGenerationRepository",
@@ -34,9 +59,14 @@ __all__ = [
     "JsonObject",
     "Page",
     "PageRequest",
+    "ProjectRecord",
+    "ProjectRepository",
     "SettingsRecord",
     "SettingsRepository",
     "SortDirection",
     "UserRecord",
     "UserRepository",
+    "WorkspaceMembershipRecord",
+    "WorkspaceRecord",
+    "WorkspaceRepository",
 ]
