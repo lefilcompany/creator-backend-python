@@ -957,7 +957,8 @@ async def test_workspace_crud_routes_are_scoped_to_current_user() -> None:
     assert create_response.status_code == 201
     assert get_response.json()["data"]["id"] == workspace_id
     assert update_response.json()["data"]["name"] == "Updated Growth"
-    assert delete_response.json()["data"] == {"deleted": True}
+    assert delete_response.json()["data"]["workspace"]["id"] == workspace_id
+    assert delete_response.json()["data"]["workspace"]["deleted_at"] is not None
     assert unit_of_work.commits == 3
 
 
