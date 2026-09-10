@@ -25,6 +25,12 @@ alembic upgrade head
 uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+Em outro processo, execute o worker de Generation Job de imagem:
+
+```bash
+creator-worker image-generation
+```
+
 No Windows PowerShell:
 
 ```powershell
@@ -36,12 +42,34 @@ alembic upgrade head
 uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+Em outro PowerShell, execute o worker de Generation Job de imagem:
+
+```powershell
+creator-worker image-generation
+```
+
 Swagger fica disponível em `http://localhost:8000/docs`; ReDoc em `http://localhost:8000/redoc`.
 Execute a validação local com `ruff check src tests`, `ruff format --check src tests`, `mypy src` e `pytest`. Em ambientes com `make`, `make check` roda o mesmo conjunto.
 
 Para gerar Content de texto ou imagem com Gemini real, configure `GEMINI_API_KEY` no `.env`.
 Sem essa chave, os endpoints protegidos continuam disponíveis, mas chamadas de geração retornam
 erro estruturado de provider não configurado depois da autenticação e autorização de Workspace.
+
+O signup Creator cria o primeiro Workspace e uma Membership `owner` para o Principal:
+
+```json
+{
+  "email": "principal@example.com",
+  "password": "correct-password",
+  "workspace": {
+    "name": "Creator Workspace"
+  }
+}
+```
+
+Use o `data.workspace.id` retornado como `workspace_id` em `POST /api/v1/content/generate`.
+Também é possível criar outro Workspace em `POST /api/v1/workspaces` e soft-delete em
+`DELETE /api/v1/workspaces/{id}`.
 
 ## Arquitetura
 

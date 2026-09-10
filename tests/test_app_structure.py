@@ -30,4 +30,5 @@ def test_compose_runs_migrations_before_api_and_worker() -> None:
 
     assert "  migrate:" in compose
     assert 'command: ["alembic", "upgrade", "head"]' in compose
+    assert 'command: ["creator-worker", "image-generation"]' in compose
     assert compose.count("migrate: { condition: service_completed_successfully }") == 2

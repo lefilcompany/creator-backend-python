@@ -14,11 +14,13 @@ from creator.services.storage.provider import (
     SUPPORTED_STORAGE_MIME_TYPES,
     StorageConfigurationError,
     StorageDeleteError,
+    StorageObjectNotFoundError,
     StorageProvider,
     StorageUploadError,
     StorageUrlError,
     StorageValidationError,
     StoredObject,
+    StoredObjectMetadata,
     UploadObjectRequest,
 )
 
@@ -106,6 +108,52 @@ class SupabaseStorageProvider:
         except (TimeoutError, URLError) as error:
             raise StorageDeleteError("Supabase Storage delete failed") from error
 
+    def stat(self, path: str) -> StoredObjectMetadata:
+        self._require_settings()
+        try:
+            http_request = Request(
+                self._object_info_url(path),
+                headers={
+                    "apikey": self._service_role_key,
+                    "Authorization": f"Bearer {self._service_role_key}",
+                    "Accept": "application/json",
+                },
+                method="GET",
+            )
+            response = self._opener(http_request, self._settings.supabase_auth_timeout_seconds)
+            status_code = int(getattr(response, "status", 200))
+            response_body = bytes(response.read())
+            if status_code == 404:
+                raise StorageObjectNotFoundError("Supabase Storage object does not exist")
+            if status_code >= 400:
+                raise StorageUrlError("Supabase Storage object metadata request failed")
+        except HTTPError as error:
+            if error.code == 404:
+                raise StorageObjectNotFoundError(
+                    "Supabase Storage object does not exist"
+                ) from error
+            raise StorageUrlError("Supabase Storage object metadata request failed") from error
+        except (TimeoutError, URLError) as error:
+            raise StorageUrlError("Supabase Storage object metadata request failed") from error
+
+        try:
+            payload = json.loads(response_body.decode("utf-8")) if response_body else {}
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise StorageUrlError("Supabase Storage returned invalid metadata response") from error
+        if not isinstance(payload, dict):
+            raise StorageUrlError("Supabase Storage returned invalid metadata response")
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        mimetype = payload.get("mimetype") or payload.get("mime_type") or metadata.get("mimetype")
+        size = payload.get("size") or metadata.get("size") or 0
+        checksum = metadata.get("checksum_sha256")
+        return StoredObjectMetadata(
+            path=path,
+            mime_type=str(mimetype or "application/octet-stream"),
+            size_bytes=int(size or 0),
+            checksum_sha256=str(checksum) if checksum else None,
+            metadata=dict(metadata),
+        )
+
     def get_url(self, path: str) -> str:
         self._require_settings()
         body = json.dumps({"expiresIn": self._settings.storage_signed_url_expires_seconds}).encode(
@@ -177,6 +225,10 @@ class SupabaseStorageProvider:
         quoted_path = quote(path, safe="/")
         return f"{self._storage_url}/object/sign/{self._settings.storage_bucket}/{quoted_path}"
 
+    def _object_info_url(self, path: str) -> str:
+        quoted_path = quote(path, safe="/")
+        return f"{self._storage_url}/object/info/{self._settings.storage_bucket}/{quoted_path}"
+
 
 class LocalStorageProvider:
     def __init__(self, settings: Settings) -> None:
@@ -190,6 +242,8 @@ class LocalStorageProvider:
         target = self._target_path(request.path)
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
+            if target.exists():
+                raise StorageUploadError("Local storage object already exists")
             target.write_bytes(request.content)
         except OSError as error:
             raise StorageUploadError("Local storage upload failed") from error
@@ -215,6 +269,23 @@ class LocalStorageProvider:
             raise StorageUrlError("Local storage object does not exist")
         return target.as_uri()
 
+    def stat(self, path: str) -> StoredObjectMetadata:
+        target = self._target_path(path)
+        if not target.exists():
+            raise StorageObjectNotFoundError("Local storage object does not exist")
+        try:
+            content = target.read_bytes()
+        except OSError as error:
+            raise StorageUrlError("Local storage object metadata is unavailable") from error
+        checksum = hashlib.sha256(content).hexdigest()
+        return StoredObjectMetadata(
+            path=path,
+            mime_type=_mime_type_from_path(path),
+            size_bytes=len(content),
+            checksum_sha256=checksum,
+            metadata={"provider": "local"},
+        )
+
     def _target_path(self, path: str) -> Path:
         validate_upload_request(
             UploadObjectRequest(path=path, content=b"placeholder", mime_type="image/png"),
@@ -234,3 +305,14 @@ def create_storage_provider(settings: Settings) -> StorageProvider:
             return LocalStorageProvider(settings)
         case _:
             raise StorageConfigurationError("Unsupported storage provider")
+
+
+def _mime_type_from_path(path: str) -> str:
+    suffix = Path(path).suffix.lower()
+    if suffix == ".png":
+        return "image/png"
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".webp":
+        return "image/webp"
+    return "application/octet-stream"

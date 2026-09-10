@@ -12,10 +12,12 @@ from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.storage import LocalStorageProvider, SupabaseStorageProvider
 from creator.repositories import GenerationJobRecord, ImageMetadata, ImageRecord, UserRecord
 from creator.services.storage.provider import (
+    StorageObjectNotFoundError,
     StorageUploadError,
     StorageUrlError,
     StorageValidationError,
     StoredObject,
+    StoredObjectMetadata,
     UploadObjectRequest,
     immutable_image_path,
 )
@@ -45,8 +47,14 @@ class FakeStorageOpener:
 
 
 class FakeStorage:
-    def __init__(self, *, fail_upload: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_upload: bool = False,
+        existing: StoredObjectMetadata | None = None,
+    ) -> None:
         self.fail_upload = fail_upload
+        self.existing = existing
         self.uploads: list[UploadObjectRequest] = []
         self.deleted: list[str] = []
 
@@ -69,6 +77,11 @@ class FakeStorage:
     def get_url(self, path: str) -> str:
         return f"https://storage.example/{path}"
 
+    def stat(self, path: str) -> StoredObjectMetadata:
+        if self.existing is None:
+            raise StorageObjectNotFoundError("missing")
+        return self.existing
+
 
 class FakeImageGenerationRepository:
     def __init__(self, *, complete_error: Exception | None = None) -> None:
@@ -90,6 +103,12 @@ class FakeImageGenerationRepository:
 
     def next_image_version(self, content_id: UUID) -> int:
         return 3
+
+    def reserve_image_version(self, job_id: UUID) -> int:
+        return 3
+
+    def get_image_by_generation_id(self, generation_id: UUID) -> ImageRecord | None:
+        return None
 
     def complete_job(self, job_id: UUID, image: ImageMetadata) -> ImageRecord:
         self.completed.append(image)
@@ -339,6 +358,61 @@ def test_persist_generated_image_marks_job_failed_when_upload_fails() -> None:
     assert repository.completed == []
     assert repository.failed[0]["failure_code"] == "STORAGE_UPLOAD_FAILED"
     assert unit_of_work.commits == 1
+
+
+def test_persist_generated_image_recovers_existing_upload_without_duplicate() -> None:
+    repository = FakeImageGenerationRepository()
+    unit_of_work = FakeUnitOfWork(repository)
+    job = job_record()
+    storage = FakeStorage(
+        fail_upload=True,
+        existing=StoredObjectMetadata(
+            path=f"users/principal-123/contents/{job.content_id}/versions/3/image.png",
+            mime_type="image/png",
+            size_bytes=len(generated_image().content),
+            checksum_sha256=None,
+            metadata={"provider": "fake"},
+        ),
+    )
+
+    image = persist_generated_image(
+        unit_of_work=unit_of_work,
+        storage=storage,
+        job=job,
+        user=user_record(),
+        image=generated_image(),
+    )
+
+    assert repository.failed == []
+    assert repository.completed[0].version_number == 3
+    assert image.storage_path == storage.existing.path
+
+
+def test_persist_generated_image_keeps_recovered_upload_when_completion_fails() -> None:
+    repository = FakeImageGenerationRepository(complete_error=RuntimeError("db failed"))
+    unit_of_work = FakeUnitOfWork(repository)
+    job = job_record()
+    storage = FakeStorage(
+        fail_upload=True,
+        existing=StoredObjectMetadata(
+            path=f"users/principal-123/contents/{job.content_id}/versions/3/image.png",
+            mime_type="image/png",
+            size_bytes=len(generated_image().content),
+            checksum_sha256=None,
+            metadata={"provider": "fake"},
+        ),
+    )
+
+    with pytest.raises(RuntimeError):
+        persist_generated_image(
+            unit_of_work=unit_of_work,
+            storage=storage,
+            job=job,
+            user=user_record(),
+            image=generated_image(),
+        )
+
+    assert storage.deleted == []
 
 
 def test_persist_generated_image_deletes_uploaded_object_when_completion_fails() -> None:

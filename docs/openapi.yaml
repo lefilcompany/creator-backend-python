@@ -56,9 +56,45 @@ paths:
               schema: { $ref: '#/components/schemas/AuthSignupResponse' }
         '400': { $ref: '#/components/responses/SignupRejected' }
         '429': { $ref: '#/components/responses/AuthRateLimited' }
-        '500': { $ref: '#/components/responses/AuthMisconfigured' }
+        '500': { $ref: '#/components/responses/SignupFailed' }
         '502': { $ref: '#/components/responses/AuthUpstreamFailed' }
         '504': { $ref: '#/components/responses/AuthTimedOut' }
+  /api/v1/workspaces:
+    post:
+      operationId: createWorkspace
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
+      responses:
+        '201':
+          description: Workspace created with an owner Membership for the authenticated Principal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceCreateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/WorkspaceCreateFailed' }
+  /api/v1/workspaces/{id}:
+    delete:
+      operationId: deleteWorkspace
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200':
+          description: Workspace soft-deleted by its owner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceDeleteResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/WorkspaceNotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/WorkspaceDeleteFailed' }
   /api/v1/content/generate:
     post:
       operationId: generateContent
@@ -194,6 +230,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    SignupFailed:
+      description: Supabase Auth is misconfigured or the local signup Workspace bootstrap failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     AuthRateLimited:
       description: Supabase Auth rate limit or quota was exceeded.
       content:
@@ -221,6 +262,21 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     WorkspaceAccessDenied:
       description: The authenticated user does not have an active Membership for the Workspace.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceNotFound:
+      description: The Workspace does not exist or the authenticated Principal cannot manage it.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceCreateFailed:
+      description: Workspace creation could not be persisted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceDeleteFailed:
+      description: Workspace deletion could not be persisted.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -288,10 +344,11 @@ components:
         password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
     AuthSignupRequest:
       type: object
-      required: [email, password]
+      required: [email, password, workspace]
       properties:
         email: { type: string, format: email, maxLength: 320 }
         password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+        workspace: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
     AuthPrincipal:
       type: object
       required: [subject]
@@ -328,13 +385,15 @@ components:
             request_id: { type: string, format: uuid }
     AuthSignupResult:
       type: object
-      required: [principal, session, confirmation_required, provider, metadata]
+      required: [principal, session, workspace, membership, confirmation_required, provider, metadata]
       properties:
         principal: { $ref: '#/components/schemas/AuthPrincipal' }
         session:
           anyOf:
             - $ref: '#/components/schemas/AuthSession'
             - type: 'null'
+        workspace: { $ref: '#/components/schemas/Workspace' }
+        membership: { $ref: '#/components/schemas/WorkspaceMembership' }
         confirmation_required: { type: boolean }
         provider: { type: string, const: supabase }
         metadata:
@@ -440,6 +499,44 @@ components:
         deleted_at:
           type: [string, 'null']
           format: date-time
+    WorkspaceCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+    WorkspaceCreateResult:
+      type: object
+      required: [workspace, membership]
+      properties:
+        workspace: { $ref: '#/components/schemas/Workspace' }
+        membership: { $ref: '#/components/schemas/WorkspaceMembership' }
+    WorkspaceCreateResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/WorkspaceCreateResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    WorkspaceDeleteResult:
+      type: object
+      required: [workspace]
+      properties:
+        workspace: { $ref: '#/components/schemas/Workspace' }
+    WorkspaceDeleteResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/WorkspaceDeleteResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     Content:
       type: object
       required: [id, workspace_id, type, payload, created_at, updated_at]

@@ -6,12 +6,14 @@ from creator.repositories import (
     ImageGenerationRepository,
     SettingsRepository,
     UserRepository,
+    WorkspaceRepository,
 )
 
 
 class UnitOfWork(Protocol):
     users: UserRepository
     settings: SettingsRepository
+    workspaces: WorkspaceRepository
     contents: ContentRepository
     image_generations: ImageGenerationRepository
 

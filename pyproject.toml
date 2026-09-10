@@ -22,6 +22,9 @@ dependencies = [
   "Pillow==12.1.0",
 ]
 
+[project.scripts]
+creator-worker = "creator.workers.cli:main"
+
 [project.optional-dependencies]
 dev = [
   "httpx==0.28.1",

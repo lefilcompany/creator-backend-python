@@ -30,9 +30,14 @@ class AuthLoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=4096, repr=False)
 
 
+class WorkspaceCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
 class AuthSignupRequest(BaseModel):
     email: str = Field(min_length=1, max_length=320)
     password: str = Field(min_length=1, max_length=4096, repr=False)
+    workspace: WorkspaceCreateRequest
 
 
 class GenerateImageRequest(BaseModel):

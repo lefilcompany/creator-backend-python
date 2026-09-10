@@ -17,7 +17,7 @@ from creator.repositories import ContentRecord, ImageGenerationStatusRecord, Use
 
 
 class GenerationQueue(Protocol):
-    def enqueue(self, f: str, *args: object, job_id: str) -> object: ...
+    def enqueue_image_generation(self, *, job_id: UUID, request_id: UUID) -> object: ...
 
 
 class IdempotencyConflictError(ConflictError):
@@ -37,6 +37,7 @@ def submit_image_generation(
     content_id: UUID,
     style: str,
     idempotency_key: str,
+    request_id: UUID,
 ) -> ImageGenerationStatusRecord:
     external_id = image_generation_external_id(user.id, idempotency_key)
     request_fingerprint = image_generation_request_fingerprint(
@@ -74,6 +75,7 @@ def submit_image_generation(
             prompt=rendered_prompt.text,
             parameters=generation_parameters,
             external_id=external_id,
+            max_attempts=settings.image_generation_job_max_attempts,
         )
     except ConflictError:
         unit_of_work.rollback()
@@ -87,11 +89,7 @@ def submit_image_generation(
         return existing
 
     try:
-        queue.enqueue(
-            "creator.workers.image_generation.run_image_generation",
-            str(job.id),
-            job_id=f"image-generation:{job.id}",
-        )
+        queue.enqueue_image_generation(job_id=job.id, request_id=request_id)
     except Exception as error:
         unit_of_work.rollback()
         raise QueueEnqueueError("Image Generation Job could not be enqueued") from error

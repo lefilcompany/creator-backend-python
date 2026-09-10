@@ -23,6 +23,7 @@ from creator.integrations.gemini.exceptions import GeminiTimeoutError
 from creator.main import app, create_app
 from creator.repositories import (
     ContentRecord,
+    CreatedWorkspaceRecord,
     GeneratedTextContentRecord,
     GenerationJobRecord,
     ImageGenerationStatusRecord,
@@ -30,6 +31,8 @@ from creator.repositories import (
     Page,
     SettingsRecord,
     UserRecord,
+    WorkspaceMembershipRecord,
+    WorkspaceRecord,
 )
 from creator.repositories.common import PageRequest
 from creator.services.storage.provider import StorageUrlError
@@ -56,16 +59,7 @@ def unauthenticated_app() -> object:
 
 def authorized_app() -> object:
     application = authenticated_app()
-    application.dependency_overrides[get_current_user] = lambda: UserRecord(
-        id=UUID("00000000-0000-0000-0000-000000000001"),
-        external_id="principal-123",
-        email="principal@example.com",
-        display_name="Principal Example",
-        global_role="membro",
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-        deleted_at=None,
-    )
+    application.dependency_overrides[get_current_user] = lambda: user_record()
     return application
 
 
@@ -166,6 +160,45 @@ class FakeContentRepository:
         return Page(items=[], total=0, page=page.page, limit=page.limit)
 
 
+class FakeUserRepository:
+    def __init__(self, existing: UserRecord | None = None) -> None:
+        self.existing = existing
+        self.added: list[dict[str, str | None]] = []
+
+    def add(
+        self,
+        *,
+        external_id: str,
+        email: str | None = None,
+        display_name: str | None = None,
+        global_role: str = "membro",
+    ) -> UserRecord:
+        self.added.append(
+            {"external_id": external_id, "email": email, "display_name": display_name}
+        )
+        return user_record(external_id=external_id, email=email, display_name=display_name)
+
+    def get_by_id(self, user_id: UUID, *, include_deleted: bool = False) -> UserRecord | None:
+        return self.existing if self.existing and self.existing.id == user_id else None
+
+    def get_by_external_id(
+        self, external_id: str, *, include_deleted: bool = False
+    ) -> UserRecord | None:
+        return self.existing if self.existing and self.existing.external_id == external_id else None
+
+    def update_profile(
+        self,
+        user_id: UUID,
+        *,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> UserRecord:
+        return user_record(user_id=user_id, email=email, display_name=display_name)
+
+    def soft_delete(self, user_id: UUID) -> None:
+        return None
+
+
 class FakeSettingsRepository:
     def __init__(self, settings: SettingsRecord | None = None) -> None:
         self.settings = settings
@@ -174,6 +207,55 @@ class FakeSettingsRepository:
     def get_by_user_id(self, user_id: UUID) -> SettingsRecord | None:
         self.requests.append(user_id)
         return self.settings
+
+
+class FakeWorkspaceRepository:
+    def __init__(self, *, create_error: Exception | None = None) -> None:
+        self.create_error = create_error
+        self.created: list[dict[str, object]] = []
+        self.deleted: list[dict[str, UUID]] = []
+
+    def create_for_user(
+        self,
+        *,
+        user_id: UUID,
+        name: str,
+        role: str = "owner",
+    ) -> CreatedWorkspaceRecord:
+        self.created.append({"user_id": user_id, "name": name, "role": role})
+        if self.create_error is not None:
+            raise self.create_error
+        workspace_id = UUID("10000000-0000-0000-0000-000000000001")
+        return CreatedWorkspaceRecord(
+            workspace=WorkspaceRecord(
+                id=workspace_id,
+                name=name,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                deleted_at=None,
+            ),
+            membership=WorkspaceMembershipRecord(
+                id=UUID("11000000-0000-0000-0000-000000000001"),
+                workspace_id=workspace_id,
+                user_id=user_id,
+                role=role,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                deleted_at=None,
+            ),
+        )
+
+    def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord:
+        self.deleted.append({"user_id": user_id, "workspace_id": workspace_id})
+        if self.create_error is not None:
+            raise self.create_error
+        return WorkspaceRecord(
+            id=workspace_id,
+            name="Creator Workspace",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            deleted_at=datetime.now(UTC),
+        )
 
 
 class FakeImageGenerationRepository:
@@ -226,10 +308,14 @@ class FakeUnitOfWork:
         content_page: Page[ContentRecord] | None = None,
         workspace_access: bool = True,
         content_create_error: Exception | None = None,
+        workspace_create_error: Exception | None = None,
+        existing_user: UserRecord | None = None,
         settings_record: SettingsRecord | None = None,
         status: ImageGenerationStatusRecord | None = None,
         existing: ImageGenerationStatusRecord | None = None,
     ) -> None:
+        self.users = FakeUserRepository(existing_user)
+        self.workspaces = FakeWorkspaceRepository(create_error=workspace_create_error)
         self.contents = FakeContentRepository(
             content,
             page=content_page,
@@ -271,8 +357,8 @@ class FakeGenerationQueue:
         self.error = error
         self.calls: list[dict[str, object]] = []
 
-    def enqueue(self, f: str, *args: object, job_id: str) -> object:
-        self.calls.append({"f": f, "args": args, "job_id": job_id})
+    def enqueue_image_generation(self, *, job_id: UUID, request_id: UUID) -> object:
+        self.calls.append({"job_id": job_id, "request_id": request_id})
         if self.error:
             raise self.error
         return object()
@@ -371,6 +457,16 @@ def generate_content_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+def auth_signup_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "email": "new-principal@example.com",
+        "password": "correct-password",
+        "workspace": {"name": "Creator Workspace"},
+    }
+    payload.update(overrides)
+    return payload
+
+
 def job_record(
     *,
     job_id: UUID,
@@ -442,6 +538,26 @@ def supabase_access_token() -> str:
         },
         JWT_SECRET,
         algorithm="HS256",
+    )
+
+
+def user_record(
+    *,
+    user_id: UUID | None = None,
+    external_id: str = "principal-123",
+    email: str | None = "principal@example.com",
+    display_name: str | None = "Principal Example",
+    deleted_at: datetime | None = None,
+) -> UserRecord:
+    return UserRecord(
+        id=user_id or UUID("00000000-0000-0000-0000-000000000001"),
+        external_id=external_id,
+        email=email,
+        display_name=display_name,
+        global_role="membro",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        deleted_at=deleted_at,
     )
 
 
@@ -663,15 +779,17 @@ async def test_signup_returns_created_principal_without_session_when_confirmatio
     None
 ):
     auth_client = FakeAuthClient()
+    unit_of_work = FakeUnitOfWork()
     application = create_app()
     application.dependency_overrides[get_auth_client] = lambda: auth_client
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
 
     async with AsyncClient(
         transport=ASGITransport(app=application), base_url="http://test"
     ) as client:
         response = await client.post(
             "/api/v1/auth/signup",
-            json={"email": "new-principal@example.com", "password": "correct-password"},
+            json=auth_signup_payload(),
         )
 
     assert response.status_code == 200
@@ -682,6 +800,24 @@ async def test_signup_returns_created_principal_without_session_when_confirmatio
         "role": "authenticated",
     }
     assert response.json()["data"]["session"] is None
+    assert response.json()["data"]["workspace"]["id"] == "10000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["workspace"]["name"] == "Creator Workspace"
+    assert response.json()["data"]["membership"]["role"] == "owner"
+    assert unit_of_work.users.added == [
+        {
+            "external_id": "principal-123",
+            "email": "new-principal@example.com",
+            "display_name": None,
+        }
+    ]
+    assert unit_of_work.workspaces.created == [
+        {
+            "user_id": UUID("00000000-0000-0000-0000-000000000001"),
+            "name": "Creator Workspace",
+            "role": "owner",
+        }
+    ]
+    assert unit_of_work.commits == 1
     assert response.json()["data"]["confirmation_required"] is True
     assert auth_client.requests == [
         {"email": "new-principal@example.com", "password": "correct-password"}
@@ -691,6 +827,7 @@ async def test_signup_returns_created_principal_without_session_when_confirmatio
 @pytest.mark.anyio
 async def test_signup_rejects_invalid_request_with_structured_error() -> None:
     application = create_app()
+    application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork()
     application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(
         AuthSignupRejectedError("rejected")
     )
@@ -700,7 +837,7 @@ async def test_signup_rejects_invalid_request_with_structured_error() -> None:
     ) as client:
         response = await client.post(
             "/api/v1/auth/signup",
-            json={"email": "new-principal@example.com", "password": "password"},
+            json=auth_signup_payload(password="password"),
         )
 
     assert response.status_code == 400
@@ -711,6 +848,7 @@ async def test_signup_rejects_invalid_request_with_structured_error() -> None:
 @pytest.mark.anyio
 async def test_signup_rejection_includes_normalized_provider_message() -> None:
     application = create_app()
+    application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork()
     application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(
         AuthSignupRejectedError(
             "rejected",
@@ -724,7 +862,7 @@ async def test_signup_rejection_includes_normalized_provider_message() -> None:
     ) as client:
         response = await client.post(
             "/api/v1/auth/signup",
-            json={"email": "new-principal@example.com", "password": "password"},
+            json=auth_signup_payload(password="password"),
         )
 
     assert response.status_code == 400
@@ -733,6 +871,76 @@ async def test_signup_rejection_includes_normalized_provider_message() -> None:
         "code": "SIGNUP_REJECTED",
         "message": "User already registered",
     }
+
+
+@pytest.mark.anyio
+async def test_signup_rolls_back_when_workspace_bootstrap_fails() -> None:
+    application = create_app()
+    unit_of_work = FakeUnitOfWork(workspace_create_error=PersistenceError("db failed"))
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/auth/signup", json=auth_signup_payload())
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "SIGNUP_BOOTSTRAP_FAILED"
+    assert unit_of_work.commits == 0
+    assert unit_of_work.rollbacks == 1
+
+
+@pytest.mark.anyio
+async def test_create_workspace_returns_owner_membership() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/workspaces",
+            json={"name": "Second Workspace"},
+        )
+
+    assert response.status_code == 201
+    assert response.json()["success"] is True
+    assert response.json()["data"]["workspace"]["name"] == "Second Workspace"
+    assert response.json()["data"]["membership"]["role"] == "owner"
+    assert unit_of_work.workspaces.created == [
+        {
+            "user_id": UUID("00000000-0000-0000-0000-000000000001"),
+            "name": "Second Workspace",
+            "role": "owner",
+        }
+    ]
+    assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_delete_workspace_soft_deletes_owned_workspace() -> None:
+    workspace_id = UUID("10000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/api/v1/workspaces/{workspace_id}")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["workspace"]["id"] == str(workspace_id)
+    assert response.json()["data"]["workspace"]["deleted_at"] is not None
+    assert unit_of_work.workspaces.deleted == [
+        {
+            "user_id": UUID("00000000-0000-0000-0000-000000000001"),
+            "workspace_id": workspace_id,
+        }
+    ]
+    assert unit_of_work.commits == 1
 
 
 @pytest.mark.anyio
@@ -802,13 +1010,13 @@ async def test_generate_image_returns_accepted_job_and_enqueues_work() -> None:
     assert response.json()["data"]["image"] is None
     assert queue.calls == [
         {
-            "f": "creator.workers.image_generation.run_image_generation",
-            "args": ("50000000-0000-0000-0000-000000000001",),
-            "job_id": "image-generation:50000000-0000-0000-0000-000000000001",
+            "job_id": UUID("50000000-0000-0000-0000-000000000001"),
+            "request_id": UUID(response.json()["meta"]["request_id"]),
         }
     ]
     created = unit_of_work.image_generations.created[0]
     assert created["model"] == "gemini-2.5-flash-image"
+    assert created["max_attempts"] == 3
     assert "CREATOR_PROMPT" in str(created["prompt"])
     assert created["parameters"]["style"] == "photographic"
     assert created["parameters"]["prompt_template"]["id"] == "image.advertising.v1"
@@ -1052,6 +1260,8 @@ async def test_swagger_and_openapi_are_available() -> None:
     assert "/health" in openapi_schema["paths"]
     assert "/api/v1/auth/login" in openapi_schema["paths"]
     assert "/api/v1/auth/signup" in openapi_schema["paths"]
+    assert "/api/v1/workspaces" in openapi_schema["paths"]
+    assert "/api/v1/workspaces/{id}" in openapi_schema["paths"]
 
 
 @pytest.mark.anyio

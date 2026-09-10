@@ -17,11 +17,18 @@ from creator.repositories.image_generation import (
 )
 from creator.repositories.settings import SettingsRecord, SettingsRepository
 from creator.repositories.user import UserRecord, UserRepository
+from creator.repositories.workspace import (
+    CreatedWorkspaceRecord,
+    WorkspaceMembershipRecord,
+    WorkspaceRecord,
+    WorkspaceRepository,
+)
 
 __all__ = [
     "ContentFilters",
     "ContentRecord",
     "ContentRepository",
+    "CreatedWorkspaceRecord",
     "GeneratedTextContentRecord",
     "GenerationHistoryFilters",
     "GenerationJobRecord",
@@ -39,4 +46,7 @@ __all__ = [
     "SortDirection",
     "UserRecord",
     "UserRepository",
+    "WorkspaceMembershipRecord",
+    "WorkspaceRecord",
+    "WorkspaceRepository",
 ]

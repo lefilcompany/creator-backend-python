@@ -22,6 +22,10 @@ class StorageUploadError(StorageError):
     """Raised when upload fails before persistence is complete."""
 
 
+class StorageObjectNotFoundError(StorageError):
+    """Raised when object metadata cannot be found."""
+
+
 class StorageDeleteError(StorageError):
     """Raised when object cleanup fails."""
 
@@ -49,6 +53,15 @@ class StoredObject:
     metadata: dict[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class StoredObjectMetadata:
+    path: str
+    mime_type: str
+    size_bytes: int
+    checksum_sha256: str | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
 class StorageProvider(Protocol):
     def upload(self, request: UploadObjectRequest) -> StoredObject:
         """Store content and return a provider-neutral object reference."""
@@ -58,6 +71,9 @@ class StorageProvider(Protocol):
 
     def get_url(self, path: str) -> str:
         """Return a usable URL for a stored object."""
+
+    def stat(self, path: str) -> StoredObjectMetadata:
+        """Return metadata for a stored object."""
 
 
 def image_extension_for_mime_type(mime_type: str) -> str:

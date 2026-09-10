@@ -20,6 +20,7 @@ from creator.infrastructure import models
 from creator.repositories import (
     ContentFilters,
     ContentRecord,
+    CreatedWorkspaceRecord,
     GeneratedTextContentRecord,
     GenerationHistoryFilters,
     GenerationJobRecord,
@@ -32,6 +33,8 @@ from creator.repositories import (
     PageRequest,
     SettingsRecord,
     UserRecord,
+    WorkspaceMembershipRecord,
+    WorkspaceRecord,
 )
 
 
@@ -91,6 +94,30 @@ def _settings_record(row: models.Settings) -> SettingsRecord:
         preferences=_json(row.preferences),
         created_at=_datetime(row.created_at),
         updated_at=_datetime(row.updated_at),
+    )
+
+
+def _workspace_record(row: models.Workspace) -> WorkspaceRecord:
+    return WorkspaceRecord(
+        id=row.id,
+        name=row.name,
+        created_at=_datetime(row.created_at),
+        updated_at=_datetime(row.updated_at),
+        deleted_at=_optional_datetime(row.deleted_at),
+    )
+
+
+def _workspace_membership_record(
+    row: models.WorkspaceMembership,
+) -> WorkspaceMembershipRecord:
+    return WorkspaceMembershipRecord(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        user_id=row.user_id,
+        role=_enum_value(row.role),
+        created_at=_datetime(row.created_at),
+        updated_at=_datetime(row.updated_at),
+        deleted_at=_optional_datetime(row.deleted_at),
     )
 
 
@@ -272,6 +299,70 @@ class SqlAlchemySettingsRepository:
         row.updated_at = _now()
         flush_or_raise(self._session)
         return _settings_record(row)
+
+
+class SqlAlchemyWorkspaceRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def create_for_user(
+        self,
+        *,
+        user_id: UUID,
+        name: str,
+        role: str = "owner",
+    ) -> CreatedWorkspaceRecord:
+        workspace = models.Workspace(name=name)
+        self._session.add(workspace)
+        flush_or_raise(self._session)
+
+        membership = models.WorkspaceMembership(
+            workspace_id=workspace.id,
+            user_id=user_id,
+            role=role,
+        )
+        self._session.add(membership)
+        flush_or_raise(self._session)
+
+        return CreatedWorkspaceRecord(
+            workspace=_workspace_record(workspace),
+            membership=_workspace_membership_record(membership),
+        )
+
+    def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord:
+        row = self._session.scalars(
+            select(models.Workspace)
+            .join(
+                models.WorkspaceMembership,
+                and_(
+                    models.WorkspaceMembership.workspace_id == models.Workspace.id,
+                    models.WorkspaceMembership.user_id == user_id,
+                    models.WorkspaceMembership.role == models.WorkspaceRole.OWNER,
+                    models.WorkspaceMembership.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                models.Workspace.id == workspace_id,
+                models.Workspace.deleted_at.is_(None),
+            )
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
+            raise EntityNotFoundError("Workspace not found")
+
+        timestamp = _now()
+        row.deleted_at = timestamp
+        row.updated_at = timestamp
+        self._session.execute(
+            models.WorkspaceMembership.__table__.update()
+            .where(
+                models.WorkspaceMembership.workspace_id == workspace_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
+            )
+            .values(deleted_at=timestamp, updated_at=timestamp)
+        )
+        flush_or_raise(self._session)
+        return _workspace_record(row)
 
 
 class SqlAlchemyContentRepository:
@@ -490,6 +581,7 @@ class SqlAlchemyImageGenerationRepository:
         prompt: str,
         parameters: JsonObject | None = None,
         external_id: str | None = None,
+        max_attempts: int = 1,
     ) -> GenerationJobRecord:
         content = self._session.scalars(
             select(models.Content).where(
@@ -516,6 +608,7 @@ class SqlAlchemyImageGenerationRepository:
             workspace_id=workspace_id,
             generation_id=generation.id,
             external_id=external_id,
+            max_attempts=max_attempts,
         )
         self._session.add(job)
         flush_or_raise(self._session)
@@ -595,6 +688,21 @@ class SqlAlchemyImageGenerationRepository:
     def next_image_version(self, content_id: UUID) -> int:
         return self._next_image_version(content_id)
 
+    def reserve_image_version(self, job_id: UUID) -> int:
+        job = self._locked_job(job_id)
+        generation = self._generation_for_job(job)
+        parameters = _json(generation.parameters)
+        reserved = parameters.get("image_version_number")
+        if isinstance(reserved, int) and reserved > 0:
+            return reserved
+        self._lock_content(generation.content_id)
+        version_number = self._next_image_version(generation.content_id)
+        parameters["image_version_number"] = version_number
+        generation.parameters = parameters
+        generation.updated_at = _now()
+        flush_or_raise(self._session)
+        return version_number
+
     def get_status_for_user(
         self,
         *,
@@ -649,7 +757,9 @@ class SqlAlchemyImageGenerationRepository:
             )
             .where(
                 models.GenerationJob.id == job_id,
-                models.GenerationJob.status == GenerationJobStatus.PENDING,
+                models.GenerationJob.status.in_(
+                    [GenerationJobStatus.PENDING, GenerationJobStatus.PROCESSING]
+                ),
                 models.GenerationJob.deleted_at.is_(None),
             )
             .with_for_update(of=models.GenerationJob)
@@ -658,7 +768,8 @@ class SqlAlchemyImageGenerationRepository:
         if row is None:
             return None
         job, generation, user = row
-        self._transition_job(job, GenerationJobStatus.PROCESSING)
+        if job.status == GenerationJobStatus.PENDING:
+            self._transition_job(job, GenerationJobStatus.PROCESSING)
         timestamp = _now()
         job.started_at = timestamp
         job.attempt_count += 1
@@ -671,6 +782,41 @@ class SqlAlchemyImageGenerationRepository:
             parameters=_json(generation.parameters),
             requested_by_user=_user_record(user),
         )
+
+    def get_image_by_generation_id(self, generation_id: UUID) -> ImageRecord | None:
+        image = self._session.scalars(
+            select(models.Image).where(
+                models.Image.generation_id == generation_id,
+                models.Image.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        return _image_record(image) if image else None
+
+    def fail_stale_processing(
+        self,
+        *,
+        older_than: datetime,
+        failure_code: str,
+        failure_message: str,
+    ) -> int:
+        jobs = self._session.scalars(
+            select(models.GenerationJob)
+            .where(
+                models.GenerationJob.status == GenerationJobStatus.PROCESSING,
+                models.GenerationJob.started_at < older_than,
+                models.GenerationJob.deleted_at.is_(None),
+            )
+            .with_for_update(skip_locked=True)
+        ).all()
+        timestamp = _now()
+        for job in jobs:
+            self._transition_job(job, GenerationJobStatus.FAILED)
+            job.failure_code = failure_code
+            job.failure_message = failure_message
+            job.failed_at = timestamp
+            job.updated_at = timestamp
+        flush_or_raise(self._session)
+        return len(jobs)
 
     def get_image_for_user(
         self,

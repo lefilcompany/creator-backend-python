@@ -110,6 +110,7 @@ class ImageGenerationRepository(Protocol):
         prompt: str,
         parameters: JsonObject | None = None,
         external_id: str | None = None,
+        max_attempts: int = 1,
     ) -> GenerationJobRecord: ...
 
     def get_job_for_user(
@@ -134,6 +135,8 @@ class ImageGenerationRepository(Protocol):
 
     def next_image_version(self, content_id: UUID) -> int: ...
 
+    def reserve_image_version(self, job_id: UUID) -> int: ...
+
     def get_status_for_user(
         self,
         *,
@@ -151,6 +154,16 @@ class ImageGenerationRepository(Protocol):
     ) -> ImageGenerationStatusRecord | None: ...
 
     def claim_pending_by_id(self, job_id: UUID) -> ImageGenerationWorkItem | None: ...
+
+    def get_image_by_generation_id(self, generation_id: UUID) -> ImageRecord | None: ...
+
+    def fail_stale_processing(
+        self,
+        *,
+        older_than: datetime,
+        failure_code: str,
+        failure_message: str,
+    ) -> int: ...
 
     def get_image_for_user(
         self,

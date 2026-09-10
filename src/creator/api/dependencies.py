@@ -14,19 +14,16 @@ from creator.infrastructure.auth import (
     create_auth_client,
     create_auth_token_verifier,
 )
-from creator.infrastructure.queue import get_generation_queue as get_rq_generation_queue
+from creator.infrastructure.queue import (
+    RqGenerationQueue,
+    get_generation_queue as get_rq_generation_queue,
+)
 from creator.infrastructure.storage import create_storage_provider
 from creator.infrastructure.unit_of_work import get_unit_of_work
 from creator.repositories import UserRecord
 from creator.services.ai.factory import create_llm_provider
 from creator.services.ai.provider import LLMProvider
 from creator.services.storage.provider import StorageConfigurationError, StorageProvider
-
-try:
-    from rq import Queue
-except ImportError:  # pragma: no cover - rq is a runtime dependency
-    Queue = object  # type: ignore[misc, assignment]
-
 
 bearer_scheme = HTTPBearer(auto_error=False, scheme_name="SupabaseBearerAuth")
 
@@ -135,7 +132,7 @@ def get_storage_provider(
         ) from error
 
 
-def get_generation_queue() -> Queue:
+def get_generation_queue() -> RqGenerationQueue:
     return get_rq_generation_queue()
 
 

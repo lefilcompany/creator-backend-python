@@ -13,6 +13,7 @@ from creator.infrastructure.dtos import (
     SqlAlchemyImageGenerationRepository,
     SqlAlchemySettingsRepository,
     SqlAlchemyUserRepository,
+    SqlAlchemyWorkspaceRepository,
     map_sqlalchemy_error,
 )
 from creator.repositories import (
@@ -20,6 +21,7 @@ from creator.repositories import (
     ImageGenerationRepository,
     SettingsRepository,
     UserRepository,
+    WorkspaceRepository,
 )
 
 SessionFactory = Callable[[], Session]
@@ -28,6 +30,7 @@ SessionFactory = Callable[[], Session]
 class SqlAlchemyUnitOfWork:
     users: UserRepository
     settings: SettingsRepository
+    workspaces: WorkspaceRepository
     contents: ContentRepository
     image_generations: ImageGenerationRepository
 
@@ -41,6 +44,7 @@ class SqlAlchemyUnitOfWork:
         self._session = session
         self.users = SqlAlchemyUserRepository(session)
         self.settings = SqlAlchemySettingsRepository(session)
+        self.workspaces = SqlAlchemyWorkspaceRepository(session)
         self.contents = SqlAlchemyContentRepository(session)
         self.image_generations = SqlAlchemyImageGenerationRepository(session)
         return self

@@ -21,6 +21,7 @@ from creator.api.schemas import (
     AuthSignupRequest,
     GenerateContentRequest,
     GenerateImageRequest,
+    WorkspaceCreateRequest,
 )
 from creator.application.content_generation import (
     ContentGenerationPersistenceError,
@@ -36,8 +37,8 @@ from creator.application.image_generation import (
 )
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings, get_settings
-from creator.domain.auth import AuthSession, AuthSignupResult
-from creator.domain.exceptions import EntityNotFoundError
+from creator.domain.auth import AuthSession, AuthSignupResult, Principal
+from creator.domain.exceptions import EntityNotFoundError, PersistenceError
 from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.auth import (
     AuthClient,
@@ -64,6 +65,8 @@ from creator.repositories import (
     ImageRecord,
     Page,
     UserRecord,
+    WorkspaceMembershipRecord,
+    WorkspaceRecord,
 )
 from creator.repositories.common import PageRequest
 from creator.services.ai.provider import LLMProvider, ProviderNotConfiguredError
@@ -73,10 +76,15 @@ from creator.services.storage.provider import StorageProvider, StorageUrlError
 def _request_id(request: Request | None = None) -> UUID:
     if request is None:
         return uuid4()
+    existing = getattr(request.state, "request_id", None)
+    if isinstance(existing, UUID):
+        return existing
     try:
-        return UUID(request.headers.get("X-Request-ID", ""))
+        request_id = UUID(request.headers.get("X-Request-ID", ""))
     except ValueError:
-        return uuid4()
+        request_id = uuid4()
+    request.state.request_id = request_id
+    return request_id
 
 
 def _json_response(
@@ -155,7 +163,34 @@ def _auth_session_data(session: AuthSession) -> dict[str, Any]:
     }
 
 
-def _auth_signup_data(result: AuthSignupResult) -> dict[str, Any]:
+def _workspace_data(workspace: WorkspaceRecord) -> dict[str, Any]:
+    return {
+        "id": str(workspace.id),
+        "name": workspace.name,
+        "created_at": workspace.created_at.isoformat(),
+        "updated_at": workspace.updated_at.isoformat(),
+        "deleted_at": workspace.deleted_at.isoformat() if workspace.deleted_at else None,
+    }
+
+
+def _workspace_membership_data(membership: WorkspaceMembershipRecord) -> dict[str, Any]:
+    return {
+        "id": str(membership.id),
+        "workspace_id": str(membership.workspace_id),
+        "user_id": str(membership.user_id),
+        "role": membership.role,
+        "created_at": membership.created_at.isoformat(),
+        "updated_at": membership.updated_at.isoformat(),
+        "deleted_at": membership.deleted_at.isoformat() if membership.deleted_at else None,
+    }
+
+
+def _auth_signup_data(
+    result: AuthSignupResult,
+    *,
+    workspace: WorkspaceRecord,
+    membership: WorkspaceMembershipRecord,
+) -> dict[str, Any]:
     return {
         "principal": {
             "subject": result.principal.subject,
@@ -163,10 +198,34 @@ def _auth_signup_data(result: AuthSignupResult) -> dict[str, Any]:
             "role": result.principal.role,
         },
         "session": _auth_session_data(result.session) if result.session else None,
+        "workspace": _workspace_data(workspace),
+        "membership": _workspace_membership_data(membership),
         "confirmation_required": result.confirmation_required,
         "provider": result.provider,
         "metadata": result.metadata,
     }
+
+
+def _bootstrap_signup_workspace(
+    *,
+    unit_of_work: UnitOfWork,
+    principal: Principal,
+    workspace_name: str,
+) -> tuple[UserRecord, WorkspaceRecord, WorkspaceMembershipRecord]:
+    existing = unit_of_work.users.get_by_external_id(principal.subject, include_deleted=True)
+    if existing is not None and existing.deleted_at is not None:
+        raise EntityNotFoundError("User not found")
+    user = existing or unit_of_work.users.add(
+        external_id=principal.subject,
+        email=principal.email,
+        display_name=None,
+    )
+    created = unit_of_work.workspaces.create_for_user(
+        user_id=user.id,
+        name=workspace_name,
+    )
+    unit_of_work.commit()
+    return user, created.workspace, created.membership
 
 
 def _content_data(
@@ -358,6 +417,7 @@ def create_app() -> FastAPI:
         payload: AuthSignupRequest,
         request: Request,
         auth_client: Annotated[AuthClient, Depends(get_auth_client)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
         try:
             result = auth_client.sign_up_with_password(
@@ -413,7 +473,92 @@ def create_app() -> FastAPI:
                 },
             ) from error
 
-        return success_response(_auth_signup_data(result), request)
+        try:
+            _, workspace, membership = _bootstrap_signup_workspace(
+                unit_of_work=unit_of_work,
+                principal=result.principal,
+                workspace_name=payload.workspace.name,
+            )
+        except PersistenceError as error:
+            unit_of_work.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "SIGNUP_BOOTSTRAP_FAILED",
+                    "message": "Signup Workspace could not be created",
+                },
+            ) from error
+
+        return success_response(
+            _auth_signup_data(result, workspace=workspace, membership=membership),
+            request,
+        )
+
+    @application.post("/api/v1/workspaces")
+    def create_workspace(
+        payload: WorkspaceCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        try:
+            created = unit_of_work.workspaces.create_for_user(
+                user_id=current_user.id,
+                name=payload.name,
+            )
+            unit_of_work.commit()
+        except PersistenceError as error:
+            unit_of_work.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "WORKSPACE_CREATE_FAILED",
+                    "message": "Workspace could not be created",
+                },
+            ) from error
+
+        return success_response(
+            {
+                "workspace": _workspace_data(created.workspace),
+                "membership": _workspace_membership_data(created.membership),
+            },
+            request,
+            status_code=201,
+        )
+
+    @application.delete("/api/v1/workspaces/{id}")
+    def delete_workspace(
+        workspace_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        try:
+            workspace = unit_of_work.workspaces.soft_delete_for_user(
+                user_id=current_user.id,
+                workspace_id=workspace_id,
+            )
+            unit_of_work.commit()
+        except EntityNotFoundError as error:
+            unit_of_work.rollback()
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "WORKSPACE_NOT_FOUND",
+                    "message": "Workspace not found",
+                },
+            ) from error
+        except PersistenceError as error:
+            unit_of_work.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "WORKSPACE_DELETE_FAILED",
+                    "message": "Workspace could not be deleted",
+                },
+            ) from error
+
+        return success_response({"workspace": _workspace_data(workspace)}, request)
 
     @application.post("/api/v1/content/generate")
     def generate_text_content(
@@ -535,6 +680,7 @@ def create_app() -> FastAPI:
         queue: Annotated[GenerationQueue, Depends(get_generation_queue)],
     ) -> JSONResponse:
         try:
+            request_id = _request_id(request)
             status = submit_image_generation(
                 unit_of_work=unit_of_work,
                 queue=queue,
@@ -543,6 +689,7 @@ def create_app() -> FastAPI:
                 content_id=payload.content_id,
                 style=payload.style,
                 idempotency_key=idempotency_key,
+                request_id=request_id,
             )
         except EntityNotFoundError as error:
             raise HTTPException(

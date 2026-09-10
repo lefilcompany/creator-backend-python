@@ -20,6 +20,7 @@ from creator.infrastructure.dtos import (
     SqlAlchemyImageGenerationRepository,
     SqlAlchemySettingsRepository,
     SqlAlchemyUserRepository,
+    SqlAlchemyWorkspaceRepository,
     flush_or_raise,
 )
 from creator.repositories import (
@@ -265,6 +266,43 @@ def test_settings_repository_raises_for_missing_update() -> None:
         SqlAlchemySettingsRepository(fake_session(session)).update_preferences(uuid4(), {})
 
 
+def test_workspace_repository_creates_workspace_with_owner_membership() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyWorkspaceRepository(fake_session(session))
+    user_id = uuid4()
+
+    created = repository.create_for_user(user_id=user_id, name="Creator Workspace")
+
+    assert created.workspace.name == "Creator Workspace"
+    assert created.membership.user_id == user_id
+    assert created.membership.workspace_id == created.workspace.id
+    assert created.membership.role == "owner"
+    assert any(isinstance(row, models.Workspace) for row in session.added)
+    assert any(isinstance(row, models.WorkspaceMembership) for row in session.added)
+
+
+def test_workspace_repository_soft_deletes_owned_workspace() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyWorkspaceRepository(fake_session(session))
+    workspace = workspace_row()
+    session.scalars_results.append(ScalarResult(workspace))
+    session.execute_results.append(ExecuteResult())
+
+    deleted = repository.soft_delete_for_user(user_id=uuid4(), workspace_id=workspace.id)
+
+    assert deleted.id == workspace.id
+    assert deleted.deleted_at is not None
+
+
+def test_workspace_repository_rejects_delete_without_owner_membership() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyWorkspaceRepository(fake_session(session))
+    session.scalars_results.append(ScalarResult(None))
+
+    with pytest.raises(EntityNotFoundError):
+        repository.soft_delete_for_user(user_id=uuid4(), workspace_id=uuid4())
+
+
 def test_content_repository_crud_pagination_and_soft_delete() -> None:
     session = FakeSession()
     repository = SqlAlchemyContentRepository(fake_session(session))
@@ -394,6 +432,46 @@ def test_image_generation_repository_lifecycle_paths() -> None:
         failure_message="Provider failed",
     )
     assert failed.status == GenerationJobStatus.FAILED
+
+
+def test_image_generation_repository_reclaims_processing_job_without_status_event() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyImageGenerationRepository(fake_session(session))
+    content = content_row()
+    generation = generation_row(content)
+    processing_job = job_row(generation, GenerationJobStatus.PROCESSING)
+    processing_job.attempt_count = 1
+    processing_job.max_attempts = 3
+    user = user_row()
+    user.id = generation.requested_by_user_id
+    session.execute_results.append(ExecuteResult((processing_job, generation, user)))
+
+    claimed = repository.claim_pending_by_id(processing_job.id)
+
+    assert claimed is not None
+    assert claimed.job.status == GenerationJobStatus.PROCESSING
+    assert claimed.job.attempt_count == 2
+    assert not any(
+        isinstance(row, models.GenerationJobStatusEvent) for row in session.added
+    )
+
+
+def test_image_generation_repository_reserves_image_version_once() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyImageGenerationRepository(fake_session(session))
+    content = content_row()
+    generation = generation_row(content)
+    job = job_row(generation, GenerationJobStatus.PROCESSING)
+    session.scalars_results.extend(
+        [ScalarResult(job), ScalarResult(generation), ScalarResult(content)]
+    )
+    session.execute_results.append(ExecuteResult(4))
+
+    assert repository.reserve_image_version(job.id) == 4
+    assert generation.parameters["image_version_number"] == 4
+
+    session.scalars_results.extend([ScalarResult(job), ScalarResult(generation)])
+    assert repository.reserve_image_version(job.id) == 4
 
 
 def test_image_generation_repository_scoped_history_queries() -> None:
