@@ -31,6 +31,19 @@ def _urlopen(request: Request, timeout: float) -> Any:
     return urlopen(request, timeout=timeout)
 
 
+def _coerce_size_bytes(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
+
+
 def validate_upload_request(request: UploadObjectRequest, *, max_object_bytes: int) -> str:
     if request.mime_type not in SUPPORTED_STORAGE_MIME_TYPES:
         raise StorageValidationError("Unsupported image MIME type")
@@ -149,12 +162,15 @@ class SupabaseStorageProvider:
             else {}
         )
         mimetype = payload.get("mimetype") or payload.get("mime_type") or metadata.get("mimetype")
-        size = payload.get("size") or metadata.get("size") or 0
+        raw_size: object = payload.get("size")
+        if raw_size is None:
+            raw_size = metadata.get("size", 0)
+        size_bytes = _coerce_size_bytes(raw_size)
         checksum = metadata.get("checksum_sha256")
         return StoredObjectMetadata(
             path=path,
             mime_type=str(mimetype or "application/octet-stream"),
-            size_bytes=int(size or 0),
+            size_bytes=size_bytes,
             checksum_sha256=str(checksum) if checksum else None,
             metadata=metadata,
         )
