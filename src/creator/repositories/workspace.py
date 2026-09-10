@@ -5,11 +5,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-<<<<<<< HEAD
-=======
 from creator.repositories.common import Page, PageRequest
-
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceRecord:
@@ -31,7 +27,6 @@ class WorkspaceMembershipRecord:
     deleted_at: datetime | None
 
 
-<<<<<<< HEAD
 @dataclass(frozen=True, slots=True)
 class CreatedWorkspaceRecord:
     workspace: WorkspaceRecord
@@ -39,6 +34,8 @@ class CreatedWorkspaceRecord:
 
 
 class WorkspaceRepository(Protocol):
+    def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord: ...
+
     def create_for_user(
         self,
         *,
@@ -48,9 +45,6 @@ class WorkspaceRepository(Protocol):
     ) -> CreatedWorkspaceRecord: ...
 
     def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord: ...
-=======
-class WorkspaceRepository(Protocol):
-    def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord: ...
 
     def get_for_user(
         self,
@@ -78,4 +72,3 @@ class WorkspaceRepository(Protocol):
         workspace_id: UUID,
         minimum_role: str = "viewer",
     ) -> bool: ...
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1

@@ -29,9 +29,6 @@ from creator.api.schemas import (
     ContentUpdateRequest,
     GenerateContentRequest,
     GenerateImageRequest,
-<<<<<<< HEAD
-    WorkspaceCreateRequest,
-=======
     GenerationCreateRequest,
     GenerationUpdateRequest,
     ProjectCreateRequest,
@@ -41,7 +38,6 @@ from creator.api.schemas import (
     UserUpdateRequest,
     WorkspaceCreateRequest,
     WorkspaceUpdateRequest,
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
 )
 from creator.application.content_generation import (
     ContentGenerationPersistenceError,
@@ -91,10 +87,7 @@ from creator.repositories import (
     ProjectRecord,
     SettingsRecord,
     UserRecord,
-<<<<<<< HEAD
     WorkspaceMembershipRecord,
-=======
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     WorkspaceRecord,
 )
 from creator.repositories.common import PageRequest
@@ -235,7 +228,6 @@ def _auth_signup_data(
     }
 
 
-<<<<<<< HEAD
 def _bootstrap_signup_workspace(
     *,
     unit_of_work: UnitOfWork,
@@ -256,7 +248,8 @@ def _bootstrap_signup_workspace(
     )
     unit_of_work.commit()
     return user, created.workspace, created.membership
-=======
+
+
 def _user_data(user: UserRecord) -> dict[str, Any]:
     return {
         "id": str(user.id),
@@ -282,16 +275,6 @@ def _settings_data(settings: SettingsRecord) -> dict[str, Any]:
         "default_preferences": settings.default_preferences,
         "created_at": settings.created_at.isoformat(),
         "updated_at": settings.updated_at.isoformat(),
-    }
-
-
-def _workspace_data(workspace: WorkspaceRecord) -> dict[str, Any]:
-    return {
-        "id": str(workspace.id),
-        "name": workspace.name,
-        "created_at": workspace.created_at.isoformat(),
-        "updated_at": workspace.updated_at.isoformat(),
-        "deleted_at": workspace.deleted_at.isoformat() if workspace.deleted_at else None,
     }
 
 
@@ -326,7 +309,6 @@ def _project_data(project: ProjectRecord) -> dict[str, Any]:
         "updated_at": project.updated_at.isoformat(),
         "deleted_at": project.deleted_at.isoformat() if project.deleted_at else None,
     }
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
 
 
 def _content_data(

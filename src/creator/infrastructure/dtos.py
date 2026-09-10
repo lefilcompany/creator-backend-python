@@ -38,10 +38,7 @@ from creator.repositories import (
     ProjectRecord,
     SettingsRecord,
     UserRecord,
-<<<<<<< HEAD
     WorkspaceMembershipRecord,
-=======
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     WorkspaceRecord,
 )
 
@@ -120,7 +117,6 @@ def _workspace_record(row: models.Workspace) -> WorkspaceRecord:
     )
 
 
-<<<<<<< HEAD
 def _workspace_membership_record(
     row: models.WorkspaceMembership,
 ) -> WorkspaceMembershipRecord:
@@ -129,7 +125,12 @@ def _workspace_membership_record(
         workspace_id=row.workspace_id,
         user_id=row.user_id,
         role=_enum_value(row.role),
-=======
+        created_at=_datetime(row.created_at),
+        updated_at=_datetime(row.updated_at),
+        deleted_at=_optional_datetime(row.deleted_at),
+    )
+
+
 def _brand_record(row: models.Brand) -> BrandRecord:
     return BrandRecord(
         id=row.id,
@@ -155,7 +156,6 @@ def _project_record(row: models.Project) -> ProjectRecord:
         description=row.description,
         status=row.status,
         metadata=_json(row.metadata_json),
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
         created_at=_datetime(row.created_at),
         updated_at=_datetime(row.updated_at),
         deleted_at=_optional_datetime(row.deleted_at),
@@ -338,7 +338,13 @@ class SqlAlchemyUserRepository:
         if not include_deleted:
             statement = statement.where(models.User.deleted_at.is_(None))
             count_statement = count_statement.where(models.User.deleted_at.is_(None))
-        rows, total = _page(self._session, statement, count_statement, models.User.created_at, page)
+        rows, total = _page(
+            self._session,
+            statement,
+            count_statement,
+            models.User.created_at,
+            page,
+        )
         return Page(
             items=[_user_record(row) for row in rows],
             total=total,
@@ -471,17 +477,17 @@ class SqlAlchemySettingsRepository:
         return _settings_record(row)
 
 
-<<<<<<< HEAD
-=======
 ROLE_RANK = {"viewer": 1, "editor": 2, "admin": 3, "owner": 4}
 
 
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
 class SqlAlchemyWorkspaceRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-<<<<<<< HEAD
+    def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord:
+        created = self.create_for_user(user_id=owner_user_id, name=name)
+        return created.workspace
+
     def create_for_user(
         self,
         *,
@@ -505,22 +511,6 @@ class SqlAlchemyWorkspaceRepository:
             workspace=_workspace_record(workspace),
             membership=_workspace_membership_record(membership),
         )
-
-    def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord:
-        row = self._session.scalars(
-=======
-    def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord:
-        workspace = models.Workspace(name=name)
-        self._session.add(workspace)
-        flush_or_raise(self._session)
-        membership = models.WorkspaceMembership(
-            workspace_id=workspace.id,
-            user_id=owner_user_id,
-            role=models.WorkspaceRole.OWNER,
-        )
-        self._session.add(membership)
-        flush_or_raise(self._session)
-        return _workspace_record(workspace)
 
     def get_for_user(
         self,
@@ -556,15 +546,13 @@ class SqlAlchemyWorkspaceRepository:
             )
             .where(models.Workspace.deleted_at.is_(None))
         )
-        order_column = (
-            asc(models.Workspace.created_at)
-            if page.sort == "asc"
-            else desc(models.Workspace.created_at)
+        rows, total = _page(
+            self._session,
+            statement,
+            count_statement,
+            models.Workspace.created_at,
+            page,
         )
-        rows = self._session.scalars(
-            statement.order_by(order_column).offset(page.offset).limit(page.limit)
-        ).all()
-        total = self._session.execute(count_statement).scalar_one()
         return Page(
             items=[_workspace_record(row) for row in rows],
             total=total,
@@ -580,11 +568,42 @@ class SqlAlchemyWorkspaceRepository:
         return _workspace_record(row)
 
     def soft_delete(self, *, user_id: UUID, workspace_id: UUID) -> None:
-        row = self._writable_workspace(user_id=user_id, workspace_id=workspace_id)
+        self.soft_delete_for_user(user_id=user_id, workspace_id=workspace_id)
+
+    def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord:
+        row = self._session.scalars(
+            select(models.Workspace)
+            .join(
+                models.WorkspaceMembership,
+                and_(
+                    models.WorkspaceMembership.workspace_id == models.Workspace.id,
+                    models.WorkspaceMembership.user_id == user_id,
+                    models.WorkspaceMembership.role == models.WorkspaceRole.OWNER,
+                    models.WorkspaceMembership.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                models.Workspace.id == workspace_id,
+                models.Workspace.deleted_at.is_(None),
+            )
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
+            raise EntityNotFoundError("Workspace not found")
+
         timestamp = _now()
         row.deleted_at = timestamp
         row.updated_at = timestamp
+        self._session.execute(
+            models.WorkspaceMembership.__table__.update()
+            .where(
+                models.WorkspaceMembership.workspace_id == workspace_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
+            )
+            .values(deleted_at=timestamp, updated_at=timestamp)
+        )
         flush_or_raise(self._session)
+        return _workspace_record(row)
 
     def user_has_workspace_role(
         self,
@@ -619,41 +638,12 @@ class SqlAlchemyWorkspaceRepository:
 
     def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Workspace]]:
         return (
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
             select(models.Workspace)
             .join(
                 models.WorkspaceMembership,
                 and_(
                     models.WorkspaceMembership.workspace_id == models.Workspace.id,
                     models.WorkspaceMembership.user_id == user_id,
-<<<<<<< HEAD
-                    models.WorkspaceMembership.role == models.WorkspaceRole.OWNER,
-                    models.WorkspaceMembership.deleted_at.is_(None),
-                ),
-            )
-            .where(
-                models.Workspace.id == workspace_id,
-                models.Workspace.deleted_at.is_(None),
-            )
-            .with_for_update()
-        ).one_or_none()
-        if row is None:
-            raise EntityNotFoundError("Workspace not found")
-
-        timestamp = _now()
-        row.deleted_at = timestamp
-        row.updated_at = timestamp
-        self._session.execute(
-            models.WorkspaceMembership.__table__.update()
-            .where(
-                models.WorkspaceMembership.workspace_id == workspace_id,
-                models.WorkspaceMembership.deleted_at.is_(None),
-            )
-            .values(deleted_at=timestamp, updated_at=timestamp)
-        )
-        flush_or_raise(self._session)
-        return _workspace_record(row)
-=======
                     models.WorkspaceMembership.deleted_at.is_(None),
                 ),
             )
@@ -981,7 +971,6 @@ def _page(
     ).all()
     total = session.execute(count_statement).scalar_one()
     return list(rows), total
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
 
 
 class SqlAlchemyContentRepository:
@@ -1675,7 +1664,11 @@ class SqlAlchemyImageGenerationRepository:
             limit=page.limit,
         )
 
-    def claim_next_pending(self, *, workspace_id: UUID | None = None) -> GenerationJobRecord | None:
+    def claim_next_pending(
+        self,
+        *,
+        workspace_id: UUID | None = None,
+    ) -> GenerationJobRecord | None:
         statement = (
             select(models.GenerationJob)
             .where(

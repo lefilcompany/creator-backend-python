@@ -14,10 +14,8 @@ from creator.infrastructure.auth import (
     create_auth_client,
     create_auth_token_verifier,
 )
-from creator.infrastructure.queue import (
-    RqGenerationQueue,
-    get_generation_queue as get_rq_generation_queue,
-)
+from creator.infrastructure.queue import RqGenerationQueue
+from creator.infrastructure.queue import get_generation_queue as get_rq_generation_queue
 from creator.infrastructure.storage import create_storage_provider
 from creator.infrastructure.unit_of_work import get_unit_of_work
 from creator.repositories import UserRecord

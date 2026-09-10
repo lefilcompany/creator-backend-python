@@ -30,10 +30,7 @@ from creator.repositories.image_generation import (
 from creator.repositories.settings import SettingsRecord, SettingsRepository
 from creator.repositories.user import UserRecord, UserRepository
 from creator.repositories.workspace import (
-<<<<<<< HEAD
     CreatedWorkspaceRecord,
-=======
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     WorkspaceMembershipRecord,
     WorkspaceRecord,
     WorkspaceRepository,

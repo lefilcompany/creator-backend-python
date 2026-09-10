@@ -41,11 +41,8 @@ class SqlAlchemyUnitOfWork:
     users: UserRepository
     settings: SettingsRepository
     workspaces: WorkspaceRepository
-<<<<<<< HEAD
-=======
     brands: BrandRepository
     projects: ProjectRepository
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     contents: ContentRepository
     generations: GenerationRepository
     assets: AssetRepository
@@ -63,11 +60,8 @@ class SqlAlchemyUnitOfWork:
         self.users = SqlAlchemyUserRepository(session)
         self.settings = SqlAlchemySettingsRepository(session)
         self.workspaces = SqlAlchemyWorkspaceRepository(session)
-<<<<<<< HEAD
-=======
         self.brands = SqlAlchemyBrandRepository(session)
         self.projects = SqlAlchemyProjectRepository(session)
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
         self.contents = SqlAlchemyContentRepository(session)
         self.generations = SqlAlchemyGenerationRepository(session)
         self.assets = SqlAlchemyAssetRepository(session)

@@ -19,11 +19,8 @@ class UnitOfWork(Protocol):
     users: UserRepository
     settings: SettingsRepository
     workspaces: WorkspaceRepository
-<<<<<<< HEAD
-=======
     brands: BrandRepository
     projects: ProjectRepository
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     contents: ContentRepository
     generations: GenerationRepository
     assets: AssetRepository

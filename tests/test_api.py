@@ -36,10 +36,7 @@ from creator.repositories import (
     ProjectRecord,
     SettingsRecord,
     UserRecord,
-<<<<<<< HEAD
     WorkspaceMembershipRecord,
-=======
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     WorkspaceRecord,
 )
 from creator.repositories.common import PageRequest
@@ -216,7 +213,9 @@ class FakeUserRepository:
     def get_by_external_id(
         self, external_id: str, *, include_deleted: bool = False
     ) -> UserRecord | None:
-        return self.existing if self.existing and self.existing.external_id == external_id else None
+        if self.existing and self.existing.external_id == external_id:
+            return self.existing
+        return None
 
     def update_profile(
         self,
@@ -361,11 +360,21 @@ class FakeImageGenerationRepository:
 
 
 class FakeUserRepository:
-    def __init__(self) -> None:
-        self.user = user_record(UUID("00000000-0000-0000-0000-000000000002"))
+    def __init__(self, existing: UserRecord | None = None) -> None:
+        self.user = existing or user_record(UUID("00000000-0000-0000-0000-000000000002"))
+        self.added: list[dict[str, str | None]] = []
         self.deleted: list[UUID] = []
 
     def add(self, **kwargs: object) -> UserRecord:
+        self.added.append(
+            {
+                "external_id": str(kwargs["external_id"]),
+                "email": kwargs.get("email") if isinstance(kwargs.get("email"), str) else None,
+                "display_name": kwargs.get("display_name")
+                if isinstance(kwargs.get("display_name"), str)
+                else None,
+            }
+        )
         return UserRecord(
             id=UUID("00000000-0000-0000-0000-000000000003"),
             external_id=str(kwargs["external_id"]),
@@ -385,17 +394,39 @@ class FakeUserRepository:
     def get_by_id(self, user_id: UUID, *, include_deleted: bool = False) -> UserRecord | None:
         return self.user if user_id == self.user.id else None
 
+    def get_by_external_id(
+        self, external_id: str, *, include_deleted: bool = False
+    ) -> UserRecord | None:
+        return self.user if self.user.external_id == external_id else None
+
     def update(self, user_id: UUID, **kwargs: object) -> UserRecord:
         return user_record(user_id, global_role=str(kwargs.get("global_role") or "membro"))
+
+    def update_profile(
+        self,
+        user_id: UUID,
+        *,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> UserRecord:
+        return user_record(user_id, email=email, display_name=display_name)
 
     def soft_delete(self, user_id: UUID) -> None:
         self.deleted.append(user_id)
 
 
 class FakeWorkspaceRepository:
-    def __init__(self, *, writable: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        writable: bool = True,
+        create_error: Exception | None = None,
+    ) -> None:
         self.writable = writable
+        self.create_error = create_error
         self.workspace = workspace_record(UUID("10000000-0000-0000-0000-000000000001"))
+        self.created: list[dict[str, object]] = []
+        self.deleted: list[dict[str, UUID]] = []
 
     def user_has_workspace_role(
         self, *, user_id: UUID, workspace_id: UUID, minimum_role: str = "viewer"
@@ -403,7 +434,33 @@ class FakeWorkspaceRepository:
         return self.writable
 
     def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord:
+        if self.create_error is not None:
+            raise self.create_error
         return workspace_record(UUID("10000000-0000-0000-0000-000000000002"), name=name)
+
+    def create_for_user(
+        self,
+        *,
+        user_id: UUID,
+        name: str,
+        role: str = "owner",
+    ) -> CreatedWorkspaceRecord:
+        self.created.append({"user_id": user_id, "name": name, "role": role})
+        if self.create_error is not None:
+            raise self.create_error
+        workspace = workspace_record(UUID("10000000-0000-0000-0000-000000000001"), name=name)
+        return CreatedWorkspaceRecord(
+            workspace=workspace,
+            membership=WorkspaceMembershipRecord(
+                id=UUID("11000000-0000-0000-0000-000000000001"),
+                workspace_id=workspace.id,
+                user_id=user_id,
+                role=role,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                deleted_at=None,
+            ),
+        )
 
     def list_for_user(self, *, user_id: UUID, page: PageRequest) -> Page[WorkspaceRecord]:
         return Page(items=[self.workspace], total=1, page=page.page, limit=page.limit)
@@ -418,6 +475,12 @@ class FakeWorkspaceRepository:
 
     def soft_delete(self, *, user_id: UUID, workspace_id: UUID) -> None:
         return None
+
+    def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord:
+        self.deleted.append({"user_id": user_id, "workspace_id": workspace_id})
+        if self.create_error is not None:
+            raise self.create_error
+        return workspace_record(workspace_id, deleted_at=datetime.now(UTC))
 
 
 class FakeCrudRepository:
@@ -459,15 +522,13 @@ class FakeUnitOfWork:
         status: ImageGenerationStatusRecord | None = None,
         existing: ImageGenerationStatusRecord | None = None,
     ) -> None:
-<<<<<<< HEAD
         self.users = FakeUserRepository(existing_user)
-        self.workspaces = FakeWorkspaceRepository(create_error=workspace_create_error)
-=======
-        self.users = FakeUserRepository()
-        self.workspaces = FakeWorkspaceRepository(writable=workspace_access)
+        self.workspaces = FakeWorkspaceRepository(
+            writable=workspace_access,
+            create_error=workspace_create_error,
+        )
         self.brands = FakeCrudRepository(brand_record())
         self.projects = FakeCrudRepository(project_record())
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
         self.contents = FakeContentRepository(
             content,
             page=content_page,
@@ -579,13 +640,18 @@ def user_record(user_id: UUID, *, global_role: str = "membro") -> UserRecord:
     )
 
 
-def workspace_record(workspace_id: UUID, *, name: str = "Workspace") -> WorkspaceRecord:
+def workspace_record(
+    workspace_id: UUID,
+    *,
+    name: str = "Workspace",
+    deleted_at: datetime | None = None,
+) -> WorkspaceRecord:
     return WorkspaceRecord(
         id=workspace_id,
         name=name,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
-        deleted_at=None,
+        deleted_at=deleted_at,
     )
 
 
@@ -794,7 +860,10 @@ def status_record(
             "style": "photographic",
             "idempotency": {
                 "request_fingerprint": request_fingerprint
-                or image_generation_request_fingerprint(content_id=content_id, style="photographic")
+                or image_generation_request_fingerprint(
+                    content_id=content_id,
+                    style="photographic",
+                )
             },
         },
         image=image,
@@ -818,11 +887,12 @@ def supabase_access_token() -> str:
 
 
 def user_record(
-    *,
     user_id: UUID | None = None,
+    *,
     external_id: str = "principal-123",
     email: str | None = "principal@example.com",
     display_name: str | None = "Principal Example",
+    global_role: str = "membro",
     deleted_at: datetime | None = None,
 ) -> UserRecord:
     return UserRecord(
@@ -830,7 +900,7 @@ def user_record(
         external_id=external_id,
         email=email,
         display_name=display_name,
-        global_role="membro",
+        global_role=global_role,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         deleted_at=deleted_at,
@@ -1358,9 +1428,8 @@ async def test_login_rejects_invalid_credentials_with_structured_error() -> None
 
 
 @pytest.mark.anyio
-async def test_signup_returns_created_principal_without_session_when_confirmation_is_required() -> (
-    None
-):
+async def test_signup_returns_created_principal_without_session_when_confirmation_is_required(
+) -> None:
     auth_client = FakeAuthClient()
     unit_of_work = FakeUnitOfWork()
     application = create_app()
