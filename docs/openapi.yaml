@@ -59,11 +59,6 @@ paths:
         '500': { $ref: '#/components/responses/SignupFailed' }
         '502': { $ref: '#/components/responses/AuthUpstreamFailed' }
         '504': { $ref: '#/components/responses/AuthTimedOut' }
-<<<<<<< HEAD
-  /api/v1/workspaces:
-    post:
-      operationId: createWorkspace
-=======
   /api/v1/users/me:
     get:
       operationId: getMyProfile
@@ -87,26 +82,12 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
     patch:
       operationId: updateMySettings
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
       security:
         - SupabaseBearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
-<<<<<<< HEAD
-            schema: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
-      responses:
-        '201':
-          description: Workspace created with an owner Membership for the authenticated Principal.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkspaceCreateResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-        '500': { $ref: '#/components/responses/WorkspaceCreateFailed' }
-  /api/v1/workspaces/{id}:
-=======
             schema: { $ref: '#/components/schemas/SettingsUpdateRequest' }
       responses:
         '200':
@@ -175,8 +156,20 @@ paths:
       operationId: createWorkspace
       security:
         - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
       responses:
-        '201': { description: Workspace created with owner Membership. }
+        '201':
+          description: Workspace created with an owner Membership for the authenticated Principal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceCreateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/WorkspaceCreateFailed' }
   /api/v1/workspaces/{id}:
     get:
       operationId: getWorkspace
@@ -196,7 +189,6 @@ paths:
       responses:
         '200': { description: Workspace updated by admin or owner Membership. }
         '404': { $ref: '#/components/responses/NotFound' }
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
     delete:
       operationId: deleteWorkspace
       security:
@@ -204,7 +196,6 @@ paths:
       parameters:
         - { $ref: '#/components/parameters/ResourceId' }
       responses:
-<<<<<<< HEAD
         '200':
           description: Workspace soft-deleted by its owner.
           content:
@@ -214,9 +205,6 @@ paths:
         '404': { $ref: '#/components/responses/WorkspaceNotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/WorkspaceDeleteFailed' }
-=======
-        '200': { description: Workspace soft-deleted by admin or owner Membership. }
-        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/brands:
     get:
       operationId: listBrands
@@ -413,7 +401,6 @@ paths:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Asset soft-deleted. }
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
   /api/v1/content/generate:
     post:
       operationId: generateContent
@@ -586,7 +573,6 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
-<<<<<<< HEAD
     WorkspaceNotFound:
       description: The Workspace does not exist or the authenticated Principal cannot manage it.
       content:
@@ -599,10 +585,11 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     WorkspaceDeleteFailed:
       description: Workspace deletion could not be persisted.
-=======
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     Forbidden:
       description: The authenticated Principal is valid but lacks the required role.
->>>>>>> 3f6417bb10585844ad5772267618c4bc9bd474a1
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
