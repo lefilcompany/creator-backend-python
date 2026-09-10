@@ -16,6 +16,10 @@ class RqGenerationQueue:
             default_timeout=settings.image_generation_job_timeout_seconds,
         )
 
+    @property
+    def name(self) -> str:
+        return self._queue.name
+
     def enqueue_image_generation(self, *, job_id: UUID, request_id: UUID) -> object:
         retry_intervals = list(self._settings.image_generation_retry_interval_seconds)
         return self._queue.enqueue(

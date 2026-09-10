@@ -812,9 +812,19 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        workspace = unit_of_work.workspaces.add(name=payload.name, owner_user_id=current_user.id)
+        created = unit_of_work.workspaces.create_for_user(
+            user_id=current_user.id,
+            name=payload.name,
+        )
         unit_of_work.commit()
-        return success_response(_workspace_data(workspace), request, status_code=201)
+        return success_response(
+            {
+                "workspace": _workspace_data(created.workspace),
+                "membership": _workspace_membership_data(created.membership),
+            },
+            request,
+            status_code=201,
+        )
 
     @application.get("/api/v1/workspaces/{id}")
     def get_workspace(
@@ -858,11 +868,14 @@ def create_app() -> FastAPI:
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
         try:
-            unit_of_work.workspaces.soft_delete(user_id=current_user.id, workspace_id=workspace_id)
+            workspace = unit_of_work.workspaces.soft_delete_for_user(
+                user_id=current_user.id,
+                workspace_id=workspace_id,
+            )
         except EntityNotFoundError as error:
             raise _not_found("Workspace") from error
         unit_of_work.commit()
-        return success_response({"deleted": True}, request)
+        return success_response({"workspace": _workspace_data(workspace)}, request)
 
     @application.get("/api/v1/brands")
     def list_brands(

@@ -271,7 +271,10 @@ class FakeImageGenerationRepository:
 
 class FakeUserRepository:
     def __init__(self, existing: UserRecord | None = None) -> None:
-        self.user = existing or user_record(UUID("00000000-0000-0000-0000-000000000002"))
+        self.user = existing or user_record(
+            UUID("00000000-0000-0000-0000-000000000002"),
+            external_id="existing-principal",
+        )
         self.added: list[dict[str, str | None]] = []
         self.deleted: list[UUID] = []
 
@@ -286,7 +289,7 @@ class FakeUserRepository:
             }
         )
         return UserRecord(
-            id=UUID("00000000-0000-0000-0000-000000000003"),
+            id=UUID("00000000-0000-0000-0000-000000000001"),
             external_id=str(kwargs["external_id"]),
             email=kwargs.get("email") if isinstance(kwargs.get("email"), str) else None,
             display_name=kwargs.get("display_name")
