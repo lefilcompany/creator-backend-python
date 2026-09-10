@@ -16,6 +16,7 @@ As issues #34 a #43 são issues de acompanhamento - não são tarefas duplicadas
 | [ADR-008](adr/0008-api-limits-and-soft-delete.md) | [#41](https://github.com/lefilcompany/creator-backend-python/issues/41) | #5, #13, #15, #18, [#19](issues/0019-sync-text-content-generation.md), #22, #25 |
 | [ADR-009](adr/0009-cloud-run-deployment.md) | [#42](https://github.com/lefilcompany/creator-backend-python/issues/42) | #3, #7, #24, #30, #31, #32 |
 | [ADR-010](adr/0010-architecture-governance.md) | [#43](https://github.com/lefilcompany/creator-backend-python/issues/43) | #1, #21, #26, #30, #31, #44 |
+| [ADR-011](adr/0011-core-resource-crud.md) | local | [#20](issues/0020-core-resource-crud.md) |
 
 ## Regras de atualização
 

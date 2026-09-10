@@ -25,8 +25,12 @@ EXPECTED_TABLES = {
     "settings",
     "workspaces",
     "workspace_memberships",
+    "brands",
+    "brand_settings",
+    "projects",
     "contents",
     "generations",
+    "assets",
     "generation_jobs",
     "generation_job_status_events",
     "images",
@@ -399,21 +403,23 @@ def test_repositories_create_and_update_user_settings(migrated_engine: Engine) -
         )
         settings = unit_of_work.settings.create_for_user(
             user.id,
-            preferences={"theme": "light"},
+            brand_name="Lefil",
+            default_preferences={"theme": "light"},
         )
         unit_of_work.commit()
 
     with uow_for_engine(migrated_engine) as unit_of_work:
         stored_user = unit_of_work.users.get_by_external_id(user.external_id)
-        updated_settings = unit_of_work.settings.update_preferences(
+        updated_settings = unit_of_work.settings.update_partial(
             user.id,
-            {"theme": "dark"},
+            {"default_preferences": {"theme": "dark"}},
         )
         unit_of_work.commit()
 
     assert stored_user == user
-    assert settings.preferences == {"theme": "light"}
-    assert updated_settings.preferences == {"theme": "dark"}
+    assert settings.brand_name == "Lefil"
+    assert settings.default_preferences == {"theme": "light"}
+    assert updated_settings.default_preferences == {"theme": "dark"}
 
 
 def test_content_repository_scopes_pagination_by_user_membership(

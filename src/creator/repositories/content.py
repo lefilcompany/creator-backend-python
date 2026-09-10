@@ -19,6 +19,8 @@ class ContentRecord:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
+    brand_id: UUID | None = None
+    project_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +47,8 @@ class ContentRepository(Protocol):
         workspace_id: UUID,
         created_by_user_id: UUID | None,
         content_type: str = "IMAGE",
+        brand_id: UUID | None = None,
+        project_id: UUID | None = None,
         title: str | None = None,
         payload: JsonObject | None = None,
     ) -> ContentRecord: ...
@@ -58,6 +62,8 @@ class ContentRepository(Protocol):
         payload: JsonObject,
         model: str,
         prompt: str,
+        brand_id: UUID | None = None,
+        project_id: UUID | None = None,
         parameters: JsonObject | None = None,
     ) -> GeneratedTextContentRecord: ...
 
@@ -83,6 +89,8 @@ class ContentRepository(Protocol):
         self,
         content_id: UUID,
         *,
+        brand_id: UUID | None = None,
+        project_id: UUID | None = None,
         title: str | None = None,
         payload: JsonObject | None = None,
     ) -> ContentRecord: ...

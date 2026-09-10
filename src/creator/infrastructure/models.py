@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -139,7 +140,24 @@ class Settings(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    preferences: Mapped[dict[str, object]] = mapped_column(
+    brand_name: Mapped[str | None] = mapped_column(String(255))
+    segment: Mapped[str | None] = mapped_column(String(255))
+    tone: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text("'professional'"),
+    )
+    voice: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'Clear and useful'"),
+    )
+    visual_style: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text("'photographic'"),
+    )
+    default_preferences: Mapped[dict[str, object]] = mapped_column(
         JSONB,
         nullable=False,
         server_default=text("'{}'::jsonb"),
@@ -225,10 +243,186 @@ class WorkspaceMembership(Base):
     deleted_at: Mapped[object | None] = mapped_column(timestamp_tz)
 
 
+class Brand(Base):
+    __tablename__ = "brands"
+    __table_args__ = (
+        UniqueConstraint("id", "workspace_id", name="uq_brands_id_workspace_id"),
+        CheckConstraint(
+            "deleted_at IS NULL OR deleted_at >= created_at",
+            name="ck_brands_deleted_after_created",
+        ),
+        Index("ix_brands_workspace_filter", "workspace_id", "deleted_at", "created_at"),
+        Index("ix_brands_created_by_user_id", "created_by_user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        uuid_pk, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    brand_voice: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    deleted_at: Mapped[object | None] = mapped_column(timestamp_tz)
+
+
+class BrandSettings(Base):
+    __tablename__ = "brand_settings"
+    __table_args__ = (
+        UniqueConstraint("brand_id", name="uq_brand_settings_brand_id"),
+        ForeignKeyConstraint(
+            ["brand_id", "workspace_id"],
+            ["brands.id", "brands.workspace_id"],
+            name="fk_brand_settings_brand_workspace",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "deleted_at IS NULL OR deleted_at >= created_at",
+            name="ck_brand_settings_deleted_after_created",
+        ),
+        Index("ix_brand_settings_workspace_id", "workspace_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        uuid_pk, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    brand_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    voice_settings: Mapped[dict[str, object]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    visual_settings: Mapped[dict[str, object]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    generation_defaults: Mapped[dict[str, object]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    deleted_at: Mapped[object | None] = mapped_column(timestamp_tz)
+
+
+class Project(Base):
+    __tablename__ = "projects"
+    __table_args__ = (
+        UniqueConstraint("id", "workspace_id", name="uq_projects_id_workspace_id"),
+        ForeignKeyConstraint(
+            ["brand_id", "workspace_id"],
+            ["brands.id", "brands.workspace_id"],
+            name="fk_projects_brand_workspace",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("status IN ('ACTIVE', 'ARCHIVED')", name="ck_projects_status_valid"),
+        CheckConstraint(
+            "deleted_at IS NULL OR deleted_at >= created_at",
+            name="ck_projects_deleted_after_created",
+        ),
+        Index("ix_projects_workspace_filter", "workspace_id", "deleted_at", "created_at"),
+        Index("ix_projects_brand_id", "brand_id"),
+        Index("ix_projects_created_by_user_id", "created_by_user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        uuid_pk, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    brand_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'ACTIVE'"))
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    deleted_at: Mapped[object | None] = mapped_column(timestamp_tz)
+
+
 class Content(Base):
     __tablename__ = "contents"
     __table_args__ = (
         UniqueConstraint("id", "workspace_id", name="uq_contents_id_workspace_id"),
+        ForeignKeyConstraint(
+            ["brand_id", "workspace_id"],
+            ["brands.id", "brands.workspace_id"],
+            name="fk_contents_brand_workspace",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "workspace_id"],
+            ["projects.id", "projects.workspace_id"],
+            name="fk_contents_project_workspace",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "deleted_at IS NULL OR deleted_at >= created_at",
             name="ck_contents_deleted_after_created",
@@ -249,6 +443,8 @@ class Content(Base):
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
     )
+    brand_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    project_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     content_type: Mapped[ContentType] = mapped_column(
         "type",
         content_type_enum,
@@ -288,6 +484,18 @@ class Generation(Base):
             name="fk_generations_content_workspace",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["brand_id", "workspace_id"],
+            ["brands.id", "brands.workspace_id"],
+            name="fk_generations_brand_workspace",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "workspace_id"],
+            ["projects.id", "projects.workspace_id"],
+            name="fk_generations_project_workspace",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "char_length(prompt) BETWEEN 1 AND 20000", name="ck_generations_prompt_length"
         ),
@@ -314,6 +522,8 @@ class Generation(Base):
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
     )
+    brand_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    project_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     generation_type: Mapped[GenerationType] = mapped_column(
         "type",
         generation_type_enum,
@@ -323,6 +533,80 @@ class Generation(Base):
     model: Mapped[str] = mapped_column(String(255), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     parameters: Mapped[dict[str, object]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[object] = mapped_column(
+        timestamp_tz,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    deleted_at: Mapped[object | None] = mapped_column(timestamp_tz)
+
+
+class Asset(Base):
+    __tablename__ = "assets"
+    __table_args__ = (
+        UniqueConstraint("storage_path", name="uq_assets_storage_path"),
+        ForeignKeyConstraint(
+            ["brand_id", "workspace_id"],
+            ["brands.id", "brands.workspace_id"],
+            name="fk_assets_brand_workspace",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "workspace_id"],
+            ["projects.id", "projects.workspace_id"],
+            name="fk_assets_project_workspace",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["content_id", "workspace_id"],
+            ["contents.id", "contents.workspace_id"],
+            name="fk_assets_content_workspace",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("byte_size >= 0", name="ck_assets_byte_size_non_negative"),
+        CheckConstraint("char_length(asset_type) BETWEEN 1 AND 100", name="ck_assets_type_length"),
+        CheckConstraint(
+            "deleted_at IS NULL OR deleted_at >= created_at", name="ck_assets_deleted_after_created"
+        ),
+        Index("ix_assets_workspace_filter", "workspace_id", "deleted_at", "created_at"),
+        Index("ix_assets_brand_id", "brand_id"),
+        Index("ix_assets_project_id", "project_id"),
+        Index("ix_assets_content_id", "content_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        uuid_pk, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    brand_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    project_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    content_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    uploaded_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    asset_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    public_url: Mapped[str | None] = mapped_column(String(2048))
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    checksum: Mapped[str | None] = mapped_column(String(255))
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata",
         JSONB,
         nullable=False,
         server_default=text("'{}'::jsonb"),
