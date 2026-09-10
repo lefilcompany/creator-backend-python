@@ -189,47 +189,6 @@ class FakeContentRepository:
         self.deleted.append(content_id)
 
 
-class FakeUserRepository:
-    def __init__(self, existing: UserRecord | None = None) -> None:
-        self.existing = existing
-        self.added: list[dict[str, str | None]] = []
-
-    def add(
-        self,
-        *,
-        external_id: str,
-        email: str | None = None,
-        display_name: str | None = None,
-        global_role: str = "membro",
-    ) -> UserRecord:
-        self.added.append(
-            {"external_id": external_id, "email": email, "display_name": display_name}
-        )
-        return user_record(external_id=external_id, email=email, display_name=display_name)
-
-    def get_by_id(self, user_id: UUID, *, include_deleted: bool = False) -> UserRecord | None:
-        return self.existing if self.existing and self.existing.id == user_id else None
-
-    def get_by_external_id(
-        self, external_id: str, *, include_deleted: bool = False
-    ) -> UserRecord | None:
-        if self.existing and self.existing.external_id == external_id:
-            return self.existing
-        return None
-
-    def update_profile(
-        self,
-        user_id: UUID,
-        *,
-        email: str | None = None,
-        display_name: str | None = None,
-    ) -> UserRecord:
-        return user_record(user_id=user_id, email=email, display_name=display_name)
-
-    def soft_delete(self, user_id: UUID) -> None:
-        return None
-
-
 class FakeSettingsRepository:
     def __init__(self, settings: SettingsRecord | None = None) -> None:
         self.settings = settings
@@ -266,55 +225,6 @@ class FakeSettingsRepository:
             updated_at=datetime.now(UTC),
         )
         return self.settings
-
-
-class FakeWorkspaceRepository:
-    def __init__(self, *, create_error: Exception | None = None) -> None:
-        self.create_error = create_error
-        self.created: list[dict[str, object]] = []
-        self.deleted: list[dict[str, UUID]] = []
-
-    def create_for_user(
-        self,
-        *,
-        user_id: UUID,
-        name: str,
-        role: str = "owner",
-    ) -> CreatedWorkspaceRecord:
-        self.created.append({"user_id": user_id, "name": name, "role": role})
-        if self.create_error is not None:
-            raise self.create_error
-        workspace_id = UUID("10000000-0000-0000-0000-000000000001")
-        return CreatedWorkspaceRecord(
-            workspace=WorkspaceRecord(
-                id=workspace_id,
-                name=name,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-                deleted_at=None,
-            ),
-            membership=WorkspaceMembershipRecord(
-                id=UUID("11000000-0000-0000-0000-000000000001"),
-                workspace_id=workspace_id,
-                user_id=user_id,
-                role=role,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-                deleted_at=None,
-            ),
-        )
-
-    def soft_delete_for_user(self, *, user_id: UUID, workspace_id: UUID) -> WorkspaceRecord:
-        self.deleted.append({"user_id": user_id, "workspace_id": workspace_id})
-        if self.create_error is not None:
-            raise self.create_error
-        return WorkspaceRecord(
-            id=workspace_id,
-            name="Creator Workspace",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-            deleted_at=datetime.now(UTC),
-        )
 
 
 class FakeImageGenerationRepository:
@@ -621,19 +531,6 @@ def content_record(content_id: UUID) -> ContentRecord:
         content_type="IMAGE",
         title="Launch campaign",
         payload={"produto": "Creator Pro", "oferta": "30 dias gratis"},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-        deleted_at=None,
-    )
-
-
-def user_record(user_id: UUID, *, global_role: str = "membro") -> UserRecord:
-    return UserRecord(
-        id=user_id,
-        external_id=f"principal-{user_id}",
-        email="user@example.com",
-        display_name="User Example",
-        global_role=global_role,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         deleted_at=None,

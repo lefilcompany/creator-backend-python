@@ -7,6 +7,7 @@ from uuid import UUID
 
 from creator.repositories.common import Page, PageRequest
 
+
 @dataclass(frozen=True, slots=True)
 class WorkspaceRecord:
     id: UUID
