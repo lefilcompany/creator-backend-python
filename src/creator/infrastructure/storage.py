@@ -142,7 +142,12 @@ class SupabaseStorageProvider:
             raise StorageUrlError("Supabase Storage returned invalid metadata response") from error
         if not isinstance(payload, dict):
             raise StorageUrlError("Supabase Storage returned invalid metadata response")
-        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        raw_metadata = payload.get("metadata")
+        metadata: dict[str, object] = (
+            {str(key): value for key, value in raw_metadata.items()}
+            if isinstance(raw_metadata, dict)
+            else {}
+        )
         mimetype = payload.get("mimetype") or payload.get("mime_type") or metadata.get("mimetype")
         size = payload.get("size") or metadata.get("size") or 0
         checksum = metadata.get("checksum_sha256")
@@ -151,7 +156,7 @@ class SupabaseStorageProvider:
             mime_type=str(mimetype or "application/octet-stream"),
             size_bytes=int(size or 0),
             checksum_sha256=str(checksum) if checksum else None,
-            metadata=dict(metadata),
+            metadata=metadata,
         )
 
     def get_url(self, path: str) -> str:
@@ -219,7 +224,8 @@ class SupabaseStorageProvider:
         return self._settings.supabase_service_role_key
 
     def _object_url(self, path: str) -> str:
-        return f"{self._storage_url}/object/{self._settings.storage_bucket}/{quote(path, safe='/')}"
+        quoted_path = quote(path, safe="/")
+        return f"{self._storage_url}/object/{self._settings.storage_bucket}/{quoted_path}"
 
     def _signed_url_endpoint(self, path: str) -> str:
         quoted_path = quote(path, safe="/")

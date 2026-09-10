@@ -94,10 +94,6 @@ class UserUpdateRequest(BaseModel):
     global_role: Literal["admin", "gestor", "membro"] | None = None
 
 
-class WorkspaceCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-
-
 class WorkspaceUpdateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 

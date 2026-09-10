@@ -63,16 +63,16 @@ def persist_generated_image(
         },
     )
 
+    uploaded_now = True
     try:
         stored_object = storage.upload(upload_request)
-        uploaded_now = True
     except StorageError:
-        stored_object = _recover_existing_upload(
+        recovered_object = _recover_existing_upload(
             storage=storage,
             request=upload_request,
             checksum_sha256=checksum_sha256,
         )
-        if stored_object is None:
+        if recovered_object is None:
             unit_of_work.image_generations.fail_job(
                 job.id,
                 failure_code="STORAGE_UPLOAD_FAILED",
@@ -80,6 +80,7 @@ def persist_generated_image(
             )
             unit_of_work.commit()
             raise
+        stored_object = recovered_object
         uploaded_now = False
 
     try:

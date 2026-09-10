@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import Select, and_, asc, desc, func, select
+from sqlalchemy import Select, and_, asc, desc, func, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -595,7 +595,7 @@ class SqlAlchemyWorkspaceRepository:
         row.deleted_at = timestamp
         row.updated_at = timestamp
         self._session.execute(
-            models.WorkspaceMembership.__table__.update()
+            update(models.WorkspaceMembership)
             .where(
                 models.WorkspaceMembership.workspace_id == workspace_id,
                 models.WorkspaceMembership.deleted_at.is_(None),
