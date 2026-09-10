@@ -1325,8 +1325,9 @@ async def test_login_rejects_invalid_credentials_with_structured_error() -> None
 
 
 @pytest.mark.anyio
-async def test_signup_returns_created_principal_without_session_when_confirmation_is_required(
-) -> None:
+async def test_signup_returns_created_principal_without_session_when_confirmation_is_required() -> (
+    None
+):
     auth_client = FakeAuthClient()
     unit_of_work = FakeUnitOfWork()
     application = create_app()

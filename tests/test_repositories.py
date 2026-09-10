@@ -729,9 +729,7 @@ def test_image_generation_repository_reclaims_processing_job_without_status_even
     assert claimed is not None
     assert claimed.job.status == GenerationJobStatus.PROCESSING
     assert claimed.job.attempt_count == 2
-    assert not any(
-        isinstance(row, models.GenerationJobStatusEvent) for row in session.added
-    )
+    assert not any(isinstance(row, models.GenerationJobStatusEvent) for row in session.added)
 
 
 def test_image_generation_repository_reserves_image_version_once() -> None:
