@@ -31,6 +31,7 @@ from creator.api.schemas import (
     GenerateImageRequest,
     GenerationCreateRequest,
     GenerationUpdateRequest,
+    ImproveContentRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
     RegenerateImageRequest,
@@ -45,6 +46,12 @@ from creator.application.content_generation import (
     GenerateContentCommand,
     WorkspaceAccessDeniedError,
     generate_content,
+)
+from creator.application.content_improvement import (
+    ContentImprovementInvalidResponseError,
+    ImproveContentCommand,
+    ImprovedContentPreview,
+    improve_content,
 )
 from creator.application.image_generation import (
     GenerationQueue,
@@ -365,6 +372,18 @@ def _content_detail_data(detail: ContentDetailRecord) -> dict[str, Any]:
     data = _content_data(detail.content)
     data["images"] = [_image_data(image) for image in detail.images]
     return data
+
+
+def _improved_content_data(preview: ImprovedContentPreview) -> dict[str, Any]:
+    return {
+        "text": preview.text,
+        "justification": preview.justification,
+        "original_text": preview.original_text,
+        "objective": preview.objective,
+        "persistence": preview.persistence,
+        "content_id": str(preview.content_id) if preview.content_id else None,
+        "prompt_template": preview.prompt_template,
+    }
 
 
 def _generation_data(generation: GenerationRecord) -> dict[str, Any]:
@@ -1530,6 +1549,102 @@ def create_app() -> FastAPI:
             ),
             request,
         )
+
+    @application.post("/api/v1/content/improve")
+    def improve_text_content(
+        payload: ImproveContentRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    ) -> JSONResponse:
+        try:
+            preview = improve_content(
+                unit_of_work=unit_of_work,
+                settings=settings,
+                llm_provider=llm_provider,
+                user=current_user,
+                command=ImproveContentCommand(
+                    workspace_id=payload.workspace_id,
+                    text=payload.text,
+                    content_id=payload.content_id,
+                    objective=payload.objective,
+                    context=payload.context,
+                    audience=payload.audience,
+                ),
+            )
+        except WorkspaceAccessDeniedError as error:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "WORKSPACE_ACCESS_DENIED",
+                    "message": "Workspace is not visible to the authenticated user",
+                },
+            ) from error
+        except EntityNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "CONTENT_NOT_FOUND", "message": "Content not found"},
+            ) from error
+        except ProviderNotConfiguredError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "LLM_PROVIDER_MISCONFIGURED",
+                    "message": "LLM provider is not configured",
+                },
+            ) from error
+        except GeminiAuthenticationError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "LLM_PROVIDER_MISCONFIGURED",
+                    "message": "LLM provider authentication is not configured",
+                },
+            ) from error
+        except GeminiQuotaError as error:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "LLM_PROVIDER_RATE_LIMITED",
+                    "message": "LLM provider quota or rate limit exceeded",
+                },
+            ) from error
+        except GeminiBlockedContentError as error:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "CONTENT_IMPROVEMENT_BLOCKED",
+                    "message": "Content improvement was blocked by the provider",
+                },
+            ) from error
+        except (GeminiInvalidResponseError, ContentImprovementInvalidResponseError) as error:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "LLM_PROVIDER_INVALID_RESPONSE",
+                    "message": "LLM provider returned an invalid response",
+                },
+            ) from error
+        except GeminiTimeoutError as error:
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "code": "LLM_PROVIDER_TIMEOUT",
+                    "message": "LLM provider timed out",
+                },
+            ) from error
+        except (GeminiTransientError, GeminiProviderError) as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "LLM_PROVIDER_UNAVAILABLE",
+                    "message": "LLM provider is unavailable",
+                },
+            ) from error
+
+        return success_response(_improved_content_data(preview), request)
 
     @application.post("/api/v1/images/generate")
     def generate_image(

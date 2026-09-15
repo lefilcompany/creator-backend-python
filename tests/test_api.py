@@ -746,6 +746,17 @@ def generate_content_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+def improve_content_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "workspace_id": "10000000-0000-0000-0000-000000000001",
+        "text": "Compre agora porque e muito bom para sua campanha.",
+        "objective": "persuasive",
+        "context": {"channel": "email", "brand": "Lefil"},
+    }
+    payload.update(overrides)
+    return payload
+
+
 def auth_signup_payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "email": "new-principal@example.com",
@@ -1303,6 +1314,148 @@ async def test_generate_content_rolls_back_when_persistence_fails() -> None:
     assert response.json()["error"]["code"] == "CONTENT_GENERATION_PERSISTENCE_FAILED"
     assert unit_of_work.commits == 0
     assert unit_of_work.rollbacks == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("objective", "extra_payload", "template_id"),
+    [
+        ("shorten", {}, "improvement.shorten.v1"),
+        ("persuasive", {}, "improvement.persuasive.v1"),
+        ("formal", {}, "improvement.formal.v1"),
+        ("seo", {}, "improvement.seo.v1"),
+        (
+            "audience_adaptation",
+            {"audience": "CMOs de SaaS"},
+            "improvement.audience_adaptation.v1",
+        ),
+    ],
+)
+async def test_improve_content_accepts_all_objectives(
+    objective: str,
+    extra_payload: dict[str, object],
+    template_id: str,
+) -> None:
+    unit_of_work = FakeUnitOfWork()
+    llm_provider = FakeLLMProvider(
+        output='{"text":"Copy melhorada","justification":"Ajustei clareza e foco."}'
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
+    payload = improve_content_payload(objective=objective, **extra_payload)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/content/improve", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["text"] == "Copy melhorada"
+    assert data["justification"] == "Ajustei clareza e foco."
+    assert data["objective"] == objective
+    assert data["persistence"] == "preview_only"
+    assert data["prompt_template"]["id"] == template_id
+    assert "CREATOR_PROMPT" in llm_provider.prompts[0]
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.contents.updated == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_improve_content_rejects_invalid_objective() -> None:
+    application = authorized_app()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(objective="viral"),
+        )
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.anyio
+async def test_improve_content_can_target_existing_content_without_mutating_it() -> None:
+    content = text_content_record(UUID("21000000-0000-0000-0000-000000000001"))
+    unit_of_work = FakeUnitOfWork(content=content)
+    llm_provider = FakeLLMProvider(
+        output='{"text":"Generated launch copy formal","justification":"Elevei o registro."}'
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(
+                text=None,
+                content_id=str(content.id),
+                objective="formal",
+            ),
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["original_text"] == "Generated launch copy"
+    assert data["content_id"] == str(content.id)
+    assert unit_of_work.contents.requests[0]["content_id"] == content.id
+    assert unit_of_work.contents.updated == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_improve_content_maps_provider_timeout_without_persisting() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: FakeLLMProvider(
+        error=GeminiTimeoutError("slow")
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(),
+        )
+
+    assert response.status_code == 504
+    assert response.json()["error"]["code"] == "LLM_PROVIDER_TIMEOUT"
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_improve_content_rejects_invalid_llm_response_without_persisting() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: FakeLLMProvider(
+        output="Copy melhorada sem JSON"
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(),
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "LLM_PROVIDER_INVALID_RESPONSE"
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.commits == 0
 
 
 @pytest.mark.anyio
