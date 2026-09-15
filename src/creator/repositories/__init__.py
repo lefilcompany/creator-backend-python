@@ -1,5 +1,6 @@
 from creator.repositories.common import JsonObject, Page, PageRequest, SortDirection
 from creator.repositories.content import (
+    ContentDetailRecord,
     ContentFilters,
     ContentRecord,
     ContentRepository,
@@ -44,6 +45,7 @@ __all__ = [
     "BrandSettingsRecord",
     "BrandSettingsRepository",
     "ContentFilters",
+    "ContentDetailRecord",
     "ContentRecord",
     "ContentRepository",
     "CreatedWorkspaceRecord",

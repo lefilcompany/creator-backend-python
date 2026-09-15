@@ -13,6 +13,11 @@ from creator.infrastructure.db import get_db
 from creator.infrastructure.queue import get_generation_queue
 from creator.services.agents.factory import UnconfiguredMultiAgentOrchestrator
 from creator.services.ai.factory import UnconfiguredLLMProvider
+from creator.services.retrieval.factory import (
+    UnconfiguredEmbeddingProvider,
+    UnconfiguredSemanticRetriever,
+    UnconfiguredToolCallingProvider,
+)
 
 
 def test_settings_are_cached() -> None:
@@ -150,3 +155,9 @@ def test_unconfigured_provider_is_explicit() -> None:
 
 def test_unconfigured_multi_agent_orchestrator_is_explicit() -> None:
     assert isinstance(UnconfiguredMultiAgentOrchestrator(), UnconfiguredMultiAgentOrchestrator)
+
+
+def test_unconfigured_retrieval_providers_are_explicit() -> None:
+    assert isinstance(UnconfiguredEmbeddingProvider(), UnconfiguredEmbeddingProvider)
+    assert isinstance(UnconfiguredSemanticRetriever(), UnconfiguredSemanticRetriever)
+    assert isinstance(UnconfiguredToolCallingProvider(), UnconfiguredToolCallingProvider)

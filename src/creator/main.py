@@ -31,8 +31,10 @@ from creator.api.schemas import (
     GenerateImageRequest,
     GenerationCreateRequest,
     GenerationUpdateRequest,
+    ImproveContentRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
+    RegenerateImageRequest,
     SettingsUpdateRequest,
     UserCreateRequest,
     UserUpdateRequest,
@@ -45,11 +47,18 @@ from creator.application.content_generation import (
     WorkspaceAccessDeniedError,
     generate_content,
 )
+from creator.application.content_improvement import (
+    ContentImprovementInvalidResponseError,
+    ImproveContentCommand,
+    ImprovedContentPreview,
+    improve_content,
+)
 from creator.application.image_generation import (
     GenerationQueue,
     IdempotencyConflictError,
     QueueEnqueueError,
     submit_image_generation,
+    submit_image_regeneration,
 )
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings, get_settings
@@ -79,6 +88,8 @@ from creator.repositories import (
     AssetRecord,
     BrandRecord,
     BrandSettingsRecord,
+    ContentDetailRecord,
+    ContentFilters,
     ContentRecord,
     GenerationRecord,
     ImageGenerationStatusRecord,
@@ -355,6 +366,24 @@ def _page_data(page: Page[Any], serializer: Any) -> dict[str, Any]:
 
 def _content_page_data(page: Page[ContentRecord]) -> dict[str, Any]:
     return _page_data(page, _content_data)
+
+
+def _content_detail_data(detail: ContentDetailRecord) -> dict[str, Any]:
+    data = _content_data(detail.content)
+    data["images"] = [_image_data(image) for image in detail.images]
+    return data
+
+
+def _improved_content_data(preview: ImprovedContentPreview) -> dict[str, Any]:
+    return {
+        "text": preview.text,
+        "justification": preview.justification,
+        "original_text": preview.original_text,
+        "objective": preview.objective,
+        "persistence": preview.persistence,
+        "content_id": str(preview.content_id) if preview.content_id else None,
+        "prompt_template": preview.prompt_template,
+    }
 
 
 def _generation_data(generation: GenerationRecord) -> dict[str, Any]:
@@ -1152,19 +1181,20 @@ def create_app() -> FastAPI:
         return success_response(_content_data(content), request, status_code=201)
 
     @application.get("/api/v1/contents/{id}")
+    @application.get("/api/v1/content/{id}")
     def get_content(
         content_id: Annotated[UUID, Path(alias="id")],
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        content = unit_of_work.contents.get_by_id_for_user(
+        detail = unit_of_work.contents.get_detail_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
         )
-        if content is None:
+        if detail is None:
             raise _not_found("Content")
-        return success_response(_content_data(content), request)
+        return success_response(_content_detail_data(detail), request)
 
     @application.put("/api/v1/contents/{id}")
     def update_content(
@@ -1207,6 +1237,7 @@ def create_app() -> FastAPI:
         existing = unit_of_work.contents.get_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
+            include_deleted=True,
         )
         if existing is None:
             raise _not_found("Content")
@@ -1519,6 +1550,102 @@ def create_app() -> FastAPI:
             request,
         )
 
+    @application.post("/api/v1/content/improve")
+    def improve_text_content(
+        payload: ImproveContentRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        llm_provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    ) -> JSONResponse:
+        try:
+            preview = improve_content(
+                unit_of_work=unit_of_work,
+                settings=settings,
+                llm_provider=llm_provider,
+                user=current_user,
+                command=ImproveContentCommand(
+                    workspace_id=payload.workspace_id,
+                    text=payload.text,
+                    content_id=payload.content_id,
+                    objective=payload.objective,
+                    context=payload.context,
+                    audience=payload.audience,
+                ),
+            )
+        except WorkspaceAccessDeniedError as error:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "WORKSPACE_ACCESS_DENIED",
+                    "message": "Workspace is not visible to the authenticated user",
+                },
+            ) from error
+        except EntityNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "CONTENT_NOT_FOUND", "message": "Content not found"},
+            ) from error
+        except ProviderNotConfiguredError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "LLM_PROVIDER_MISCONFIGURED",
+                    "message": "LLM provider is not configured",
+                },
+            ) from error
+        except GeminiAuthenticationError as error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "LLM_PROVIDER_MISCONFIGURED",
+                    "message": "LLM provider authentication is not configured",
+                },
+            ) from error
+        except GeminiQuotaError as error:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "LLM_PROVIDER_RATE_LIMITED",
+                    "message": "LLM provider quota or rate limit exceeded",
+                },
+            ) from error
+        except GeminiBlockedContentError as error:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "CONTENT_IMPROVEMENT_BLOCKED",
+                    "message": "Content improvement was blocked by the provider",
+                },
+            ) from error
+        except (GeminiInvalidResponseError, ContentImprovementInvalidResponseError) as error:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "LLM_PROVIDER_INVALID_RESPONSE",
+                    "message": "LLM provider returned an invalid response",
+                },
+            ) from error
+        except GeminiTimeoutError as error:
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "code": "LLM_PROVIDER_TIMEOUT",
+                    "message": "LLM provider timed out",
+                },
+            ) from error
+        except (GeminiTransientError, GeminiProviderError) as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "LLM_PROVIDER_UNAVAILABLE",
+                    "message": "LLM provider is unavailable",
+                },
+            ) from error
+
+        return success_response(_improved_content_data(preview), request)
+
     @application.post("/api/v1/images/generate")
     def generate_image(
         payload: GenerateImageRequest,
@@ -1562,6 +1689,55 @@ def create_app() -> FastAPI:
                 detail={
                     "code": "QUEUE_ENQUEUE_FAILED",
                     "message": "Image generation could not be queued",
+                },
+            ) from error
+
+        return success_response(_image_generation_status_data(status), request, status_code=202)
+
+    @application.post("/api/v1/images/{id}/regenerate")
+    def regenerate_image(
+        image_id: Annotated[UUID, Path(alias="id")],
+        payload: RegenerateImageRequest,
+        request: Request,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=128)
+        ],
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        queue: Annotated[GenerationQueue, Depends(get_generation_queue)],
+    ) -> JSONResponse:
+        try:
+            request_id = _request_id(request)
+            status = submit_image_regeneration(
+                unit_of_work=unit_of_work,
+                queue=queue,
+                settings=settings,
+                user=current_user,
+                image_id=image_id,
+                style=payload.style,
+                idempotency_key=idempotency_key,
+                request_id=request_id,
+            )
+        except EntityNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "IMAGE_NOT_FOUND", "message": "Image not found"},
+            ) from error
+        except IdempotencyConflictError as error:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Idempotency key was reused with a different request",
+                },
+            ) from error
+        except QueueEnqueueError as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "QUEUE_ENQUEUE_FAILED",
+                    "message": "Image regeneration could not be queued",
                 },
             ) from error
 
@@ -1613,9 +1789,15 @@ def create_app() -> FastAPI:
         page: Annotated[int, Query(ge=1)] = 1,
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+        q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+        content_type: Annotated[
+            str | None,
+            Query(alias="type", pattern="^(IMAGE|TEXT)$"),
+        ] = None,
     ) -> JSONResponse:
         content_page = unit_of_work.contents.list_for_user(
             user_id=current_user.id,
+            filters=ContentFilters(content_type=content_type, query=q),
             page=PageRequest(
                 page=page,
                 limit=limit,

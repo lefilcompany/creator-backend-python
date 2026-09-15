@@ -11,6 +11,7 @@ from creator.prompts import (
     build_art_direction_prompt,
     build_content_generation_prompt,
     build_copy_improvement_prompt,
+    build_text_improvement_prompt,
     build_tone_adaptation_prompt,
     generation_parameters_with_prompt_template,
 )
@@ -166,3 +167,34 @@ def test_generation_parameters_include_prompt_template_metadata() -> None:
             "input_hash": rendered.input_hash,
         },
     }
+
+
+@pytest.mark.parametrize(
+    ("objective", "template_id", "expected_instruction"),
+    [
+        ("shorten", "improvement.shorten.v1", "Encurte o texto"),
+        ("persuasive", "improvement.persuasive.v1", "editor de Content de marketing persuasivo"),
+        ("formal", "improvement.formal.v1", "linguagem profissional"),
+        ("seo", "improvement.seo.v1", "orientado a SEO"),
+        ("audience_adaptation", "improvement.audience_adaptation.v1", "publico-alvo"),
+    ],
+)
+def test_text_improvement_prompt_supports_each_objective(
+    objective: str,
+    template_id: str,
+    expected_instruction: str,
+) -> None:
+    rendered = build_text_improvement_prompt(
+        objective=objective,
+        user_input={
+            "text": "Teste o Creator hoje.",
+            "objective": objective,
+            "audience": "gestores de marketing",
+        },
+        context={"canal": "email"},
+    )
+
+    assert rendered.template_id == template_id
+    assert expected_instruction in rendered.text
+    assert '"text"' in rendered.text
+    assert '"justification"' in rendered.text

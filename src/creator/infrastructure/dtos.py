@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import Select, and_, asc, desc, func, select, update
+from sqlalchemy import Integer, Select, Text, and_, asc, desc, func, select, update
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from creator.repositories import (
     AssetRecord,
     BrandRecord,
     BrandSettingsRecord,
+    ContentDetailRecord,
     ContentFilters,
     ContentRecord,
     CreatedWorkspaceRecord,
@@ -1085,6 +1087,29 @@ class SqlAlchemyContentRepository:
         row = self._session.scalars(statement).one_or_none()
         return _content_record(row) if row else None
 
+    def get_detail_by_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        content_id: UUID,
+    ) -> ContentDetailRecord | None:
+        content = self.get_by_id_for_user(user_id=user_id, content_id=content_id)
+        if content is None:
+            return None
+        images = self._session.scalars(
+            select(models.Image)
+            .where(
+                models.Image.content_id == content.id,
+                models.Image.workspace_id == content.workspace_id,
+                models.Image.deleted_at.is_(None),
+            )
+            .order_by(models.Image.version_number.desc(), models.Image.id.desc())
+        ).all()
+        return ContentDetailRecord(
+            content=content,
+            images=[_image_record(image) for image in images],
+        )
+
     def list_for_user(
         self,
         *,
@@ -1101,8 +1126,9 @@ class SqlAlchemyContentRepository:
             if page.sort == "asc"
             else desc(models.Content.created_at)
         )
+        id_order = asc(models.Content.id) if page.sort == "asc" else desc(models.Content.id)
         rows = self._session.scalars(
-            statement.order_by(order_column).offset(page.offset).limit(page.limit)
+            statement.order_by(order_column, id_order).offset(page.offset).limit(page.limit)
         ).all()
         total = self._session.execute(count_statement).scalar_one()
         return Page(
@@ -1138,8 +1164,10 @@ class SqlAlchemyContentRepository:
 
     def soft_delete(self, content_id: UUID) -> None:
         row = self._session.get(models.Content, content_id)
-        if row is None or row.deleted_at is not None:
+        if row is None:
             raise EntityNotFoundError("Content not found")
+        if row.deleted_at is not None:
+            return
         timestamp = _now()
         row.deleted_at = timestamp
         row.updated_at = timestamp
@@ -1184,6 +1212,16 @@ class SqlAlchemyContentRepository:
             statement = statement.where(models.Content.workspace_id == filters.workspace_id)
         if filters.content_type is not None:
             statement = statement.where(models.Content.content_type == filters.content_type)
+        if filters.query is not None:
+            query = filters.query.strip()
+            if query:
+                pattern = f"%{query.lower()}%"
+                search_text = func.lower(
+                    func.coalesce(models.Content.title, "")
+                    + " "
+                    + sql_cast(models.Content.payload, Text)
+                )
+                statement = statement.where(search_text.like(pattern))
         if filters.created_from is not None:
             statement = statement.where(models.Content.created_at >= filters.created_from)
         if filters.created_to is not None:
@@ -2067,9 +2105,27 @@ class SqlAlchemyImageGenerationRepository:
         return content_id
 
     def _next_image_version(self, content_id: UUID) -> int:
-        version = self._session.execute(
+        completed_version = self._session.execute(
             select(func.coalesce(func.max(models.Image.version_number), 0) + 1).where(
                 models.Image.content_id == content_id
             )
         ).scalar_one()
-        return version
+        reserved_version = self._session.execute(
+            select(
+                func.coalesce(
+                    func.max(
+                        sql_cast(
+                            models.Generation.parameters["image_version_number"].astext,
+                            Integer,
+                        )
+                    ),
+                    0,
+                )
+                + 1
+            ).where(
+                models.Generation.content_id == content_id,
+                models.Generation.deleted_at.is_(None),
+                func.jsonb_typeof(models.Generation.parameters["image_version_number"]) == "number",
+            )
+        ).scalar_one()
+        return max(int(completed_version), int(reserved_version))

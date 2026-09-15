@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -13,7 +14,10 @@ from creator.api.dependencies import (
     get_storage_provider,
     get_uow,
 )
-from creator.application.image_generation import image_generation_request_fingerprint
+from creator.application.image_generation import (
+    image_generation_request_fingerprint,
+    image_regeneration_request_fingerprint,
+)
 from creator.config import Settings, get_settings
 from creator.domain.auth import AuthSession, AuthSignupResult, Principal
 from creator.domain.exceptions import PersistenceError
@@ -25,6 +29,8 @@ from creator.repositories import (
     AssetRecord,
     BrandRecord,
     BrandSettingsRecord,
+    ContentDetailRecord,
+    ContentFilters,
     ContentRecord,
     CreatedWorkspaceRecord,
     GeneratedTextContentRecord,
@@ -130,7 +136,8 @@ class FakeContentRepository:
         self.page = page
         self.workspace_access = workspace_access
         self.create_error = create_error
-        self.requests: list[dict[str, UUID]] = []
+        self.requests: list[dict[str, object]] = []
+        self.list_requests: list[dict[str, object]] = []
         self.workspace_requests: list[dict[str, UUID]] = []
         self.created_text_generations: list[dict[str, object]] = []
         self.created: list[dict[str, object]] = []
@@ -141,9 +148,31 @@ class FakeContentRepository:
         self.created.append(kwargs)
         return content_record(UUID("21000000-0000-0000-0000-000000000001"))
 
-    def get_by_id_for_user(self, *, user_id: UUID, content_id: UUID) -> ContentRecord | None:
-        self.requests.append({"user_id": user_id, "content_id": content_id})
+    def get_by_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        content_id: UUID,
+        include_deleted: bool = False,
+    ) -> ContentRecord | None:
+        self.requests.append(
+            {"user_id": user_id, "content_id": content_id, "include_deleted": include_deleted}
+        )
         return self.content
+
+    def get_detail_by_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        content_id: UUID,
+    ) -> ContentDetailRecord | None:
+        self.requests.append({"user_id": user_id, "content_id": content_id})
+        if self.content is None:
+            return None
+        return ContentDetailRecord(
+            content=self.content,
+            images=[stored_image(UUID("52000000-0000-0000-0000-000000000001"))],
+        )
 
     def user_has_workspace_access(self, *, user_id: UUID, workspace_id: UUID) -> bool:
         self.workspace_requests.append({"user_id": user_id, "workspace_id": workspace_id})
@@ -175,8 +204,9 @@ class FakeContentRepository:
         *,
         user_id: UUID,
         page: PageRequest,
-        filters: object | None = None,
+        filters: ContentFilters | None = None,
     ) -> Page[ContentRecord]:
+        self.list_requests.append({"user_id": user_id, "page": page, "filters": filters})
         if self.page is not None:
             return self.page
         return Page(items=[], total=0, page=page.page, limit=page.limit)
@@ -186,6 +216,8 @@ class FakeContentRepository:
         return content_record(content_id)
 
     def soft_delete(self, content_id: UUID) -> None:
+        if self.content is not None and self.content.deleted_at is not None:
+            return
         self.deleted.append(content_id)
 
 
@@ -239,6 +271,7 @@ class FakeImageGenerationRepository:
         self.created: list[dict[str, object]] = []
         self.status_requests: list[dict[str, UUID]] = []
         self.external_requests: list[dict[str, object]] = []
+        self.image_requests: list[dict[str, object]] = []
 
     def get_status_by_external_id_for_user(
         self,
@@ -267,6 +300,20 @@ class FakeImageGenerationRepository:
     ) -> ImageGenerationStatusRecord | None:
         self.status_requests.append({"user_id": user_id, "job_id": job_id})
         return self.status
+
+    def get_image_for_user(
+        self,
+        *,
+        user_id: UUID,
+        image_id: UUID,
+        include_deleted: bool = False,
+    ) -> ImageRecord | None:
+        self.image_requests.append(
+            {"user_id": user_id, "image_id": image_id, "include_deleted": include_deleted}
+        )
+        if self.status is not None and self.status.image is not None:
+            return self.status.image
+        return None
 
 
 class FakeUserRepository:
@@ -517,8 +564,8 @@ def stored_image(image_id: UUID) -> ImageRecord:
         mime_type="image/png",
         width=512,
         height=512,
-        model="gemini-image",
-        prompt="Generate",
+        model="gemini-image-original",
+        prompt="Original prompt with launch context and original offer",
         metadata={"storage_provider": "local"},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -694,6 +741,17 @@ def generate_content_payload(**overrides: object) -> dict[str, object]:
         "tone": "professional",
         "content_type": "email",
         "brand_voice": "Clear and useful",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def improve_content_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "workspace_id": "10000000-0000-0000-0000-000000000001",
+        "text": "Compre agora porque e muito bom para sua campanha.",
+        "objective": "persuasive",
+        "context": {"channel": "email", "brand": "Lefil"},
     }
     payload.update(overrides)
     return payload
@@ -1259,6 +1317,148 @@ async def test_generate_content_rolls_back_when_persistence_fails() -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("objective", "extra_payload", "template_id"),
+    [
+        ("shorten", {}, "improvement.shorten.v1"),
+        ("persuasive", {}, "improvement.persuasive.v1"),
+        ("formal", {}, "improvement.formal.v1"),
+        ("seo", {}, "improvement.seo.v1"),
+        (
+            "audience_adaptation",
+            {"audience": "CMOs de SaaS"},
+            "improvement.audience_adaptation.v1",
+        ),
+    ],
+)
+async def test_improve_content_accepts_all_objectives(
+    objective: str,
+    extra_payload: dict[str, object],
+    template_id: str,
+) -> None:
+    unit_of_work = FakeUnitOfWork()
+    llm_provider = FakeLLMProvider(
+        output='{"text":"Copy melhorada","justification":"Ajustei clareza e foco."}'
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
+    payload = improve_content_payload(objective=objective, **extra_payload)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/content/improve", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["text"] == "Copy melhorada"
+    assert data["justification"] == "Ajustei clareza e foco."
+    assert data["objective"] == objective
+    assert data["persistence"] == "preview_only"
+    assert data["prompt_template"]["id"] == template_id
+    assert "CREATOR_PROMPT" in llm_provider.prompts[0]
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.contents.updated == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_improve_content_rejects_invalid_objective() -> None:
+    application = authorized_app()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(objective="viral"),
+        )
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.anyio
+async def test_improve_content_can_target_existing_content_without_mutating_it() -> None:
+    content = text_content_record(UUID("21000000-0000-0000-0000-000000000001"))
+    unit_of_work = FakeUnitOfWork(content=content)
+    llm_provider = FakeLLMProvider(
+        output='{"text":"Generated launch copy formal","justification":"Elevei o registro."}'
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: llm_provider
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(
+                text=None,
+                content_id=str(content.id),
+                objective="formal",
+            ),
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["original_text"] == "Generated launch copy"
+    assert data["content_id"] == str(content.id)
+    assert unit_of_work.contents.requests[0]["content_id"] == content.id
+    assert unit_of_work.contents.updated == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_improve_content_maps_provider_timeout_without_persisting() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: FakeLLMProvider(
+        error=GeminiTimeoutError("slow")
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(),
+        )
+
+    assert response.status_code == 504
+    assert response.json()["error"]["code"] == "LLM_PROVIDER_TIMEOUT"
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
+async def test_improve_content_rejects_invalid_llm_response_without_persisting() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_llm_provider] = lambda: FakeLLMProvider(
+        output="Copy melhorada sem JSON"
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/content/improve",
+            json=improve_content_payload(),
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "LLM_PROVIDER_INVALID_RESPONSE"
+    assert unit_of_work.contents.created_text_generations == []
+    assert unit_of_work.commits == 0
+
+
+@pytest.mark.anyio
 async def test_list_content_returns_history_for_current_user() -> None:
     content = text_content_record(UUID("21000000-0000-0000-0000-000000000001"))
     unit_of_work = FakeUnitOfWork(
@@ -1277,6 +1477,77 @@ async def test_list_content_returns_history_for_current_user() -> None:
     assert response.json()["data"]["items"][0]["id"] == "21000000-0000-0000-0000-000000000001"
     assert response.json()["data"]["items"][0]["type"] == "TEXT"
     assert response.json()["data"]["pagination"] == {"page": 1, "limit": 20, "total": 1}
+
+
+@pytest.mark.anyio
+async def test_list_content_combines_search_type_sort_and_pagination() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/content",
+            params={"q": "launch", "type": "TEXT", "sort": "created_at", "page": 2, "limit": 5},
+        )
+
+    assert response.status_code == 200
+    request = unit_of_work.contents.list_requests[0]
+    assert request["page"] == PageRequest(page=2, limit=5, sort="asc")
+    assert request["filters"] == ContentFilters(content_type="TEXT", query="launch")
+
+
+@pytest.mark.anyio
+async def test_get_content_returns_detail_with_images() -> None:
+    content_id = UUID("21000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork(content=content_record(content_id))
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/content/{content_id}")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == str(content_id)
+    assert response.json()["data"]["images"][0]["version_number"] == 1
+
+
+@pytest.mark.anyio
+async def test_get_content_returns_not_found_without_leaking_access() -> None:
+    content_id = UUID("21000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork(content=None)
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/content/{content_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "CONTENT_NOT_FOUND"
+
+
+@pytest.mark.anyio
+async def test_delete_content_is_idempotent_for_accessible_deleted_content() -> None:
+    content_id = UUID("21000000-0000-0000-0000-000000000001")
+    deleted_content = replace(content_record(content_id), deleted_at=datetime.now(UTC))
+    unit_of_work = FakeUnitOfWork(content=deleted_content)
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/api/v1/content/{content_id}")
+
+    assert response.status_code == 200
+    assert unit_of_work.contents.requests[0]["include_deleted"] is True
+    assert unit_of_work.contents.deleted == []
 
 
 @pytest.mark.anyio
@@ -1718,6 +1989,197 @@ async def test_generate_image_rolls_back_when_queue_enqueue_fails() -> None:
             "/api/v1/images/generate",
             headers={"Idempotency-Key": "idem-1"},
             json={"content_id": str(content_id), "style": "photographic"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "QUEUE_ENQUEUE_FAILED"
+    assert unit_of_work.commits == 0
+    assert unit_of_work.rollbacks == 1
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_returns_accepted_job_and_enqueues_work() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    unit_of_work = FakeUnitOfWork(
+        content=content_record(image.content_id),
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+    )
+    queue = FakeGenerationQueue()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: queue
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "illustration"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["success"] is True
+    assert response.json()["data"]["id"] == "50000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["status"] == "PENDING"
+    assert response.json()["data"]["image"] is None
+    assert queue.calls == [
+        {
+            "job_id": UUID("50000000-0000-0000-0000-000000000001"),
+            "request_id": UUID(response.json()["meta"]["request_id"]),
+        }
+    ]
+    created = unit_of_work.image_generations.created[0]
+    assert created["content_id"] == image.content_id
+    assert created["model"] == "gemini-image-original"
+    assert "Original prompt with launch context and original offer" in str(created["prompt"])
+    assert created["parameters"]["style"] == "illustration"
+    assert created["parameters"]["regenerated_from_image_id"] == str(image_id)
+    assert created["parameters"]["regenerated_from_generation_id"] == str(image.generation_id)
+    assert created["parameters"]["regenerated_from_version_number"] == image.version_number
+    assert created["parameters"]["regenerated_from_model"] == image.model
+    assert "regenerated_from_prompt_sha256" in created["parameters"]
+    assert created["external_id"].startswith("image-regenerate:")
+    assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_reuses_original_prompt_not_current_content() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    current_content = content_record(image.content_id)
+    unit_of_work = FakeUnitOfWork(
+        content=ContentRecord(
+            id=current_content.id,
+            workspace_id=current_content.workspace_id,
+            created_by_user_id=current_content.created_by_user_id,
+            content_type=current_content.content_type,
+            title="Updated campaign",
+            payload={"produto": "Mutated Product", "oferta": "Mutated Offer"},
+            created_at=current_content.created_at,
+            updated_at=current_content.updated_at,
+            deleted_at=current_content.deleted_at,
+        ),
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: FakeGenerationQueue()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-original-context"},
+            json={"style": "product_render"},
+        )
+
+    assert response.status_code == 202
+    created = unit_of_work.image_generations.created[0]
+    assert "Original prompt with launch context and original offer" in str(created["prompt"])
+    assert "Mutated Product" not in str(created["prompt"])
+    assert unit_of_work.contents.requests == []
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_returns_existing_job_for_same_idempotency_key() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    existing = status_record(
+        job_id=UUID("50000000-0000-0000-0000-000000000001"),
+        content_id=image.content_id,
+        request_fingerprint=image_regeneration_request_fingerprint(
+            image_id=image_id,
+            style="photographic",
+        ),
+    )
+    unit_of_work = FakeUnitOfWork(
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+        existing=existing,
+    )
+    queue = FakeGenerationQueue()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: queue
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "photographic"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["data"]["id"] == "50000000-0000-0000-0000-000000000001"
+    assert queue.calls == []
+    assert unit_of_work.image_generations.created == []
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_returns_not_found_for_invisible_image() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork(status=None)
+    application.dependency_overrides[get_generation_queue] = lambda: FakeGenerationQueue()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "photographic"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "IMAGE_NOT_FOUND"
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_rolls_back_when_queue_enqueue_fails() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    unit_of_work = FakeUnitOfWork(
+        content=content_record(image.content_id),
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: FakeGenerationQueue(
+        error=RuntimeError("redis down")
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "photographic"},
         )
 
     assert response.status_code == 503

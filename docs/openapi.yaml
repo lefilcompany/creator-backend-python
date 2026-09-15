@@ -320,7 +320,7 @@ paths:
         '201': { description: Content created in a writable Workspace. }
   /api/v1/contents/{id}:
     get:
-      operationId: getContent
+      operationId: getContentCanonical
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -425,6 +425,31 @@ paths:
         '502': { $ref: '#/components/responses/LlmProviderInvalidResponse' }
         '503': { $ref: '#/components/responses/LlmProviderUnavailable' }
         '504': { $ref: '#/components/responses/LlmProviderTimedOut' }
+  /api/v1/content/improve:
+    post:
+      operationId: improveContent
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImproveContentRequest' }
+      responses:
+        '200':
+          description: Improved Content preview. The original Content is not mutated or versioned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImprovedContentResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/WorkspaceAccessDenied' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/LlmProviderRateLimited' }
+        '500': { $ref: '#/components/responses/LlmProviderMisconfigured' }
+        '502': { $ref: '#/components/responses/LlmProviderInvalidResponse' }
+        '503': { $ref: '#/components/responses/LlmProviderUnavailable' }
+        '504': { $ref: '#/components/responses/LlmProviderTimedOut' }
   /api/v1/images/generate:
     post:
       operationId: generateImage
@@ -466,6 +491,31 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
         '502': { $ref: '#/components/responses/StorageUrlUnavailable' }
+  /api/v1/images/{id}/regenerate:
+    post:
+      operationId: regenerateImage
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegenerateImageRequest' }
+      responses:
+        '202':
+          description: Image regeneration Generation Job accepted and queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageGenerationStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
+        '503': { $ref: '#/components/responses/QueueEnqueueFailed' }
   /api/v1/content:
     get:
       operationId: listContent
@@ -487,6 +537,16 @@ paths:
             type: string
             enum: [-created_at, created_at]
             default: -created_at
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [IMAGE, TEXT]
       responses:
         '200':
           description: Paginated Content visible to the authenticated user.
@@ -497,6 +557,22 @@ paths:
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
   /api/v1/content/{id}:
+    get:
+      operationId: getContent
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200':
+          description: Content detail with image versions visible to the authenticated user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentDetailResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
     delete:
       operationId: deleteContent
       security:
@@ -505,9 +581,13 @@ paths:
         - { $ref: '#/components/parameters/ResourceId' }
       responses:
         '200':
-          description: Content soft-deleted through the legacy singular route.
+          description: Content soft-deleted. Repeating the request for the same accessible Content is idempotent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentDeleteResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
 components:
   securitySchemes:
@@ -909,6 +989,42 @@ components:
         deleted_at:
           type: [string, 'null']
           format: date-time
+    ContentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Content'
+        - type: object
+          required: [images]
+          properties:
+            images:
+              type: array
+              items: { $ref: '#/components/schemas/Image' }
+    ContentDetailResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ContentDetail' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ContentDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: boolean }
+    ContentDeleteResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ContentDeleteResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     Generation:
       type: object
       required: [id, workspace_id, content_id, type, model, prompt, parameters, created_at, updated_at]
@@ -948,6 +1064,85 @@ components:
         tone: { $ref: '#/components/schemas/GenerateContentTone' }
         content_type: { $ref: '#/components/schemas/GenerateContentType' }
         brand_voice: { type: string, minLength: 1, maxLength: 1000 }
+    ImproveContentObjective:
+      type: string
+      enum: [shorten, persuasive, formal, seo, audience_adaptation]
+      description: >
+        Text improvement objective. shorten reduces length, persuasive increases
+        ethical conversion focus, formal raises register, seo improves search-oriented
+        structure and terms, and audience_adaptation adapts vocabulary and emphasis
+        for the requested audience.
+    ImproveContentRequest:
+      type: object
+      required: [workspace_id, objective]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        text:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: Original text to improve. Provide exactly one of text or content_id.
+        content_id:
+          type: string
+          format: uuid
+          description: Existing TEXT Content to preview an improvement for. Provide exactly one of text or content_id.
+        objective: { $ref: '#/components/schemas/ImproveContentObjective' }
+        context:
+          type: object
+          additionalProperties: true
+          description: Business context, constraints, keywords, channel, brand voice, or other facts required by the improvement.
+        audience:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Required when objective is audience_adaptation.
+      oneOf:
+        - required: [text]
+          not:
+            required: [content_id]
+        - required: [content_id]
+          not:
+            required: [text]
+    PromptTemplateMetadata:
+      type: object
+      required: [id, version, input_hash]
+      properties:
+        id: { type: string }
+        version: { type: string }
+        input_hash: { type: string }
+    ImprovedContent:
+      type: object
+      required: [text, justification, original_text, objective, persistence, content_id, prompt_template]
+      properties:
+        text:
+          type: string
+          description: Improved preview text.
+        justification:
+          type: string
+          description: Explanation of the changes applied to the original text.
+        original_text:
+          type: string
+          description: Source text used for the improvement. It is returned for auditability and is not mutated.
+        objective: { $ref: '#/components/schemas/ImproveContentObjective' }
+        persistence:
+          type: string
+          const: preview_only
+          description: Improvements are previews; creating a new Content or version requires an explicit future command.
+        content_id:
+          type: [string, 'null']
+          format: uuid
+        prompt_template: { $ref: '#/components/schemas/PromptTemplateMetadata' }
+    ImprovedContentResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ImprovedContent' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     GeneratedContentGeneration:
       type: object
       required: [id, model, parameters]
@@ -1011,6 +1206,10 @@ components:
       required: [content_id]
       properties:
         content_id: { type: string, format: uuid }
+        style: { $ref: '#/components/schemas/GenerateImageStyle' }
+    RegenerateImageRequest:
+      type: object
+      properties:
         style: { $ref: '#/components/schemas/GenerateImageStyle' }
     GenerationJob:
       type: object
