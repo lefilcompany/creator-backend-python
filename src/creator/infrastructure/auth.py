@@ -314,9 +314,10 @@ class SupabaseAuthClient:
 
     @property
     def _anon_key(self) -> str:
-        if not self._settings.supabase_anon_key:
+        anon_key = self._settings.supabase_anon_key
+        if not anon_key:
             raise AuthConfigurationError("SUPABASE_ANON_KEY is required for Supabase Auth login")
-        return self._settings.supabase_anon_key
+        return anon_key
 
 
 def create_auth_token_verifier(settings: Settings) -> AuthTokenVerifier:
