@@ -428,6 +428,7 @@ class Content(Base):
             name="ck_contents_deleted_after_created",
         ),
         Index("ix_contents_workspace_filter", "workspace_id", "type", "deleted_at", "created_at"),
+        Index("ix_contents_workspace_created_id", "workspace_id", "deleted_at", "created_at", "id"),
         Index("ix_contents_created_by_user_id", "created_by_user_id"),
     )
 

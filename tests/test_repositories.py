@@ -202,6 +202,7 @@ def content_row(
     user_id: UUID | None = None,
     brand_id: UUID | None = None,
     project_id: UUID | None = None,
+    deleted_at: datetime | None = None,
 ) -> models.Content:
     return models.Content(
         id=content_id or uuid4(),
@@ -214,6 +215,7 @@ def content_row(
         payload={"kind": "image"},
         created_at=NOW,
         updated_at=NOW,
+        deleted_at=deleted_at,
     )
 
 
@@ -611,6 +613,36 @@ def test_content_repository_crud_pagination_and_soft_delete() -> None:
     session.get_results.append(content)
     repository.soft_delete(content.id)
     assert content.deleted_at is not None
+
+
+def test_content_repository_returns_detail_with_images() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyContentRepository(fake_session(session))
+    content = content_row()
+    generation = generation_row(content)
+    image = image_row(generation)
+    session.scalars_results.append(ScalarResult(content))
+    session.scalars_results.append(ScalarResult(values=[image]))
+
+    detail = repository.get_detail_by_id_for_user(
+        user_id=content.created_by_user_id,
+        content_id=content.id,
+    )
+
+    assert detail is not None
+    assert detail.content.id == content.id
+    assert detail.images[0].id == image.id
+
+
+def test_content_repository_soft_delete_is_idempotent_for_deleted_content() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyContentRepository(fake_session(session))
+    content = content_row(deleted_at=NOW)
+
+    session.get_results.append(content)
+    repository.soft_delete(content.id)
+
+    assert content.deleted_at == NOW
 
 
 def test_content_repository_creates_text_content_with_generation() -> None:

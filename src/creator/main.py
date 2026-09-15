@@ -79,6 +79,8 @@ from creator.repositories import (
     AssetRecord,
     BrandRecord,
     BrandSettingsRecord,
+    ContentDetailRecord,
+    ContentFilters,
     ContentRecord,
     GenerationRecord,
     ImageGenerationStatusRecord,
@@ -355,6 +357,12 @@ def _page_data(page: Page[Any], serializer: Any) -> dict[str, Any]:
 
 def _content_page_data(page: Page[ContentRecord]) -> dict[str, Any]:
     return _page_data(page, _content_data)
+
+
+def _content_detail_data(detail: ContentDetailRecord) -> dict[str, Any]:
+    data = _content_data(detail.content)
+    data["images"] = [_image_data(image) for image in detail.images]
+    return data
 
 
 def _generation_data(generation: GenerationRecord) -> dict[str, Any]:
@@ -1152,19 +1160,20 @@ def create_app() -> FastAPI:
         return success_response(_content_data(content), request, status_code=201)
 
     @application.get("/api/v1/contents/{id}")
+    @application.get("/api/v1/content/{id}")
     def get_content(
         content_id: Annotated[UUID, Path(alias="id")],
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        content = unit_of_work.contents.get_by_id_for_user(
+        detail = unit_of_work.contents.get_detail_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
         )
-        if content is None:
+        if detail is None:
             raise _not_found("Content")
-        return success_response(_content_data(content), request)
+        return success_response(_content_detail_data(detail), request)
 
     @application.put("/api/v1/contents/{id}")
     def update_content(
@@ -1207,6 +1216,7 @@ def create_app() -> FastAPI:
         existing = unit_of_work.contents.get_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
+            include_deleted=True,
         )
         if existing is None:
             raise _not_found("Content")
@@ -1613,9 +1623,15 @@ def create_app() -> FastAPI:
         page: Annotated[int, Query(ge=1)] = 1,
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+        q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+        content_type: Annotated[
+            str | None,
+            Query(alias="type", pattern="^(IMAGE|TEXT)$"),
+        ] = None,
     ) -> JSONResponse:
         content_page = unit_of_work.contents.list_for_user(
             user_id=current_user.id,
+            filters=ContentFilters(content_type=content_type, query=q),
             page=PageRequest(
                 page=page,
                 limit=limit,

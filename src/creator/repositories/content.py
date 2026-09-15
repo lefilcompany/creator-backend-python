@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from creator.repositories.common import JsonObject, Page, PageRequest
+from creator.repositories.image_generation import ImageRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +25,12 @@ class ContentRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ContentDetailRecord:
+    content: ContentRecord
+    images: list[ImageRecord]
+
+
+@dataclass(frozen=True, slots=True)
 class GeneratedTextContentRecord:
     content: ContentRecord
     generation_id: UUID
@@ -35,6 +42,7 @@ class GeneratedTextContentRecord:
 class ContentFilters:
     workspace_id: UUID | None = None
     content_type: str | None = None
+    query: str | None = None
     created_from: datetime | None = None
     created_to: datetime | None = None
     include_deleted: bool = False
@@ -76,6 +84,13 @@ class ContentRepository(Protocol):
         content_id: UUID,
         include_deleted: bool = False,
     ) -> ContentRecord | None: ...
+
+    def get_detail_by_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        content_id: UUID,
+    ) -> ContentDetailRecord | None: ...
 
     def list_for_user(
         self,

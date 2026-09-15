@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -25,6 +26,8 @@ from creator.repositories import (
     AssetRecord,
     BrandRecord,
     BrandSettingsRecord,
+    ContentDetailRecord,
+    ContentFilters,
     ContentRecord,
     CreatedWorkspaceRecord,
     GeneratedTextContentRecord,
@@ -130,7 +133,8 @@ class FakeContentRepository:
         self.page = page
         self.workspace_access = workspace_access
         self.create_error = create_error
-        self.requests: list[dict[str, UUID]] = []
+        self.requests: list[dict[str, object]] = []
+        self.list_requests: list[dict[str, object]] = []
         self.workspace_requests: list[dict[str, UUID]] = []
         self.created_text_generations: list[dict[str, object]] = []
         self.created: list[dict[str, object]] = []
@@ -141,9 +145,31 @@ class FakeContentRepository:
         self.created.append(kwargs)
         return content_record(UUID("21000000-0000-0000-0000-000000000001"))
 
-    def get_by_id_for_user(self, *, user_id: UUID, content_id: UUID) -> ContentRecord | None:
-        self.requests.append({"user_id": user_id, "content_id": content_id})
+    def get_by_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        content_id: UUID,
+        include_deleted: bool = False,
+    ) -> ContentRecord | None:
+        self.requests.append(
+            {"user_id": user_id, "content_id": content_id, "include_deleted": include_deleted}
+        )
         return self.content
+
+    def get_detail_by_id_for_user(
+        self,
+        *,
+        user_id: UUID,
+        content_id: UUID,
+    ) -> ContentDetailRecord | None:
+        self.requests.append({"user_id": user_id, "content_id": content_id})
+        if self.content is None:
+            return None
+        return ContentDetailRecord(
+            content=self.content,
+            images=[stored_image(UUID("52000000-0000-0000-0000-000000000001"))],
+        )
 
     def user_has_workspace_access(self, *, user_id: UUID, workspace_id: UUID) -> bool:
         self.workspace_requests.append({"user_id": user_id, "workspace_id": workspace_id})
@@ -175,8 +201,9 @@ class FakeContentRepository:
         *,
         user_id: UUID,
         page: PageRequest,
-        filters: object | None = None,
+        filters: ContentFilters | None = None,
     ) -> Page[ContentRecord]:
+        self.list_requests.append({"user_id": user_id, "page": page, "filters": filters})
         if self.page is not None:
             return self.page
         return Page(items=[], total=0, page=page.page, limit=page.limit)
@@ -186,6 +213,8 @@ class FakeContentRepository:
         return content_record(content_id)
 
     def soft_delete(self, content_id: UUID) -> None:
+        if self.content is not None and self.content.deleted_at is not None:
+            return
         self.deleted.append(content_id)
 
 
@@ -1277,6 +1306,77 @@ async def test_list_content_returns_history_for_current_user() -> None:
     assert response.json()["data"]["items"][0]["id"] == "21000000-0000-0000-0000-000000000001"
     assert response.json()["data"]["items"][0]["type"] == "TEXT"
     assert response.json()["data"]["pagination"] == {"page": 1, "limit": 20, "total": 1}
+
+
+@pytest.mark.anyio
+async def test_list_content_combines_search_type_sort_and_pagination() -> None:
+    unit_of_work = FakeUnitOfWork()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/content",
+            params={"q": "launch", "type": "TEXT", "sort": "created_at", "page": 2, "limit": 5},
+        )
+
+    assert response.status_code == 200
+    request = unit_of_work.contents.list_requests[0]
+    assert request["page"] == PageRequest(page=2, limit=5, sort="asc")
+    assert request["filters"] == ContentFilters(content_type="TEXT", query="launch")
+
+
+@pytest.mark.anyio
+async def test_get_content_returns_detail_with_images() -> None:
+    content_id = UUID("21000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork(content=content_record(content_id))
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/content/{content_id}")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == str(content_id)
+    assert response.json()["data"]["images"][0]["version_number"] == 1
+
+
+@pytest.mark.anyio
+async def test_get_content_returns_not_found_without_leaking_access() -> None:
+    content_id = UUID("21000000-0000-0000-0000-000000000001")
+    unit_of_work = FakeUnitOfWork(content=None)
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/api/v1/content/{content_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "CONTENT_NOT_FOUND"
+
+
+@pytest.mark.anyio
+async def test_delete_content_is_idempotent_for_accessible_deleted_content() -> None:
+    content_id = UUID("21000000-0000-0000-0000-000000000001")
+    deleted_content = replace(content_record(content_id), deleted_at=datetime.now(UTC))
+    unit_of_work = FakeUnitOfWork(content=deleted_content)
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/api/v1/content/{content_id}")
+
+    assert response.status_code == 200
+    assert unit_of_work.contents.requests[0]["include_deleted"] is True
+    assert unit_of_work.contents.deleted == []
 
 
 @pytest.mark.anyio

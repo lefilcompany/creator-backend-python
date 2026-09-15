@@ -320,7 +320,7 @@ paths:
         '201': { description: Content created in a writable Workspace. }
   /api/v1/contents/{id}:
     get:
-      operationId: getContent
+      operationId: getContentCanonical
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -487,6 +487,16 @@ paths:
             type: string
             enum: [-created_at, created_at]
             default: -created_at
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [IMAGE, TEXT]
       responses:
         '200':
           description: Paginated Content visible to the authenticated user.
@@ -497,6 +507,22 @@ paths:
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
   /api/v1/content/{id}:
+    get:
+      operationId: getContent
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200':
+          description: Content detail with image versions visible to the authenticated user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentDetailResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
     delete:
       operationId: deleteContent
       security:
@@ -505,9 +531,13 @@ paths:
         - { $ref: '#/components/parameters/ResourceId' }
       responses:
         '200':
-          description: Content soft-deleted through the legacy singular route.
+          description: Content soft-deleted. Repeating the request for the same accessible Content is idempotent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentDeleteResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
 components:
   securitySchemes:
@@ -909,6 +939,42 @@ components:
         deleted_at:
           type: [string, 'null']
           format: date-time
+    ContentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Content'
+        - type: object
+          required: [images]
+          properties:
+            images:
+              type: array
+              items: { $ref: '#/components/schemas/Image' }
+    ContentDetailResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ContentDetail' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ContentDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: boolean }
+    ContentDeleteResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ContentDeleteResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     Generation:
       type: object
       required: [id, workspace_id, content_id, type, model, prompt, parameters, created_at, updated_at]
