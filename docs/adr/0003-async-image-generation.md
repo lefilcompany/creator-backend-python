@@ -14,4 +14,4 @@ HTTP não fica bloqueado por latência de IA. Jobs precisam de idempotência, re
 
 ## Issues vinculadas
 
-#3, #5, #7, #8, #12, #16, #25 e #33. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
+#3, #5, #7, #8, #12, #13, #16, #25 e #33. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).

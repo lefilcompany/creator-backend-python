@@ -1,9 +1,6 @@
 from creator.config import Settings
-from creator.services.ai.provider import LLMProvider
-
-
-class ProviderNotConfiguredError(RuntimeError):
-    """Raised when a provider cannot safely be used."""
+from creator.services.ai.gemini import GeminiLLMProvider
+from creator.services.ai.provider import LLMProvider, ProviderNotConfiguredError
 
 
 class UnconfiguredLLMProvider:
@@ -13,6 +10,5 @@ class UnconfiguredLLMProvider:
 
 def create_llm_provider(settings: Settings) -> LLMProvider:
     if settings.gemini_api_key:
-        # The real Gemini adapter is tracked by ADR-001's implementation issue.
-        return UnconfiguredLLMProvider()
+        return GeminiLLMProvider(settings)
     return UnconfiguredLLMProvider()

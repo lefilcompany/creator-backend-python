@@ -21,4 +21,4 @@ run:
 	uvicorn creator.main:app --host 0.0.0.0 --port 8000 --reload
 
 worker:
-	rq worker --url "$${REDIS_URL:-redis://localhost:6379/0}" generations
+	creator-worker image-generation

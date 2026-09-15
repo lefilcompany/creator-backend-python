@@ -10,7 +10,9 @@ Creator precisa gerar texto sem acoplar o domínio a um fornecedor.
 
 ## Decisão
 
-O domínio depende de `LLMProvider`; Gemini 2.5 Flash é o primeiro adapter. A seleção ocorre em uma factory e credenciais ficam fora do código.
+O domínio depende de provider interfaces; Gemini 2.5 Flash é o primeiro adapter de texto e Gemini Image é o primeiro adapter de imagem. A seleção ocorre em factories e credenciais ficam fora do código.
+
+A composição de prompts é uma boundary de aplicação separada dos endpoints e dos providers. Templates são versionados e renderizados de forma determinística antes de chamar o provider; o identificador, versão e hash da entrada acompanham a Generation para observabilidade.
 
 ## Consequências
 
@@ -18,4 +20,4 @@ Trocar o vendor não exige alterar endpoints ou casos de uso. O adapter não con
 
 ## Issues vinculadas
 
-#3, #9, #11, #17, #19, #23 e #27. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
+#3, #9, #11, #13, [#17](../issues/0017-prompt-templates.md), [#19](../issues/0019-sync-text-content-generation.md), #23 e #27. Consulte o [tracker central](../ADR-ISSUE-TRACKER.md).
