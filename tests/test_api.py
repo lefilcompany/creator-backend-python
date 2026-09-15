@@ -564,8 +564,8 @@ def stored_image(image_id: UUID) -> ImageRecord:
         mime_type="image/png",
         width=512,
         height=512,
-        model="gemini-image",
-        prompt="Generate",
+        model="gemini-image-original",
+        prompt="Original prompt with launch context and original offer",
         metadata={"storage_provider": "local"},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -2037,12 +2037,60 @@ async def test_regenerate_image_returns_accepted_job_and_enqueues_work() -> None
     ]
     created = unit_of_work.image_generations.created[0]
     assert created["content_id"] == image.content_id
+    assert created["model"] == "gemini-image-original"
+    assert "Original prompt with launch context and original offer" in str(created["prompt"])
     assert created["parameters"]["style"] == "illustration"
     assert created["parameters"]["regenerated_from_image_id"] == str(image_id)
     assert created["parameters"]["regenerated_from_generation_id"] == str(image.generation_id)
     assert created["parameters"]["regenerated_from_version_number"] == image.version_number
+    assert created["parameters"]["regenerated_from_model"] == image.model
+    assert "regenerated_from_prompt_sha256" in created["parameters"]
     assert created["external_id"].startswith("image-regenerate:")
     assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_reuses_original_prompt_not_current_content() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    current_content = content_record(image.content_id)
+    unit_of_work = FakeUnitOfWork(
+        content=ContentRecord(
+            id=current_content.id,
+            workspace_id=current_content.workspace_id,
+            created_by_user_id=current_content.created_by_user_id,
+            content_type=current_content.content_type,
+            title="Updated campaign",
+            payload={"produto": "Mutated Product", "oferta": "Mutated Offer"},
+            created_at=current_content.created_at,
+            updated_at=current_content.updated_at,
+            deleted_at=current_content.deleted_at,
+        ),
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: FakeGenerationQueue()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-original-context"},
+            json={"style": "product_render"},
+        )
+
+    assert response.status_code == 202
+    created = unit_of_work.image_generations.created[0]
+    assert "Original prompt with launch context and original offer" in str(created["prompt"])
+    assert "Mutated Product" not in str(created["prompt"])
+    assert unit_of_work.contents.requests == []
 
 
 @pytest.mark.anyio

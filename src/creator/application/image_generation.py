@@ -15,6 +15,8 @@ from creator.prompts import (
 )
 from creator.repositories import ContentRecord, ImageGenerationStatusRecord, UserRecord
 
+MAX_GENERATION_PROMPT_LENGTH = 20_000
+
 
 class GenerationQueue(Protocol):
     def enqueue_image_generation(self, *, job_id: UUID, request_id: UUID) -> object: ...
@@ -150,26 +152,9 @@ def submit_image_regeneration(
         _raise_for_idempotency_mismatch(existing, request_fingerprint)
         return existing
 
-    content = unit_of_work.contents.get_by_id_for_user(
-        user_id=user.id,
-        content_id=original_image.content_id,
-    )
-    if content is None:
-        raise EntityNotFoundError("Content not found")
-
-    rendered_prompt = build_image_generation_prompt(
-        content=content,
+    regeneration_prompt = build_image_regeneration_prompt(
+        original_prompt=original_image.prompt,
         style=resolved_style,
-        settings_context={
-            "brand_name": stored_settings.brand_name,
-            "segment": stored_settings.segment,
-            "tone": stored_settings.tone,
-            "voice": stored_settings.voice,
-            "visual_style": stored_settings.visual_style,
-            "default_preferences": stored_settings.default_preferences,
-        }
-        if stored_settings
-        else {},
     )
     parameters = generation_parameters_with_prompt_template(
         {
@@ -177,9 +162,13 @@ def submit_image_regeneration(
             "regenerated_from_image_id": str(original_image.id),
             "regenerated_from_generation_id": str(original_image.generation_id),
             "regenerated_from_version_number": original_image.version_number,
+            "regenerated_from_model": original_image.model,
+            "regenerated_from_prompt_sha256": hashlib.sha256(
+                original_image.prompt.encode("utf-8")
+            ).hexdigest(),
             "idempotency": {"request_fingerprint": request_fingerprint},
         },
-        rendered_prompt,
+        regeneration_prompt,
     )
     generation_parameters = cast(dict[str, object], parameters)
 
@@ -188,8 +177,8 @@ def submit_image_regeneration(
             workspace_id=original_image.workspace_id,
             content_id=original_image.content_id,
             requested_by_user_id=user.id,
-            model=settings.gemini_image_model,
-            prompt=rendered_prompt.text,
+            model=original_image.model or settings.gemini_image_model,
+            prompt=regeneration_prompt.text,
             parameters=generation_parameters,
             external_id=external_id,
             max_attempts=settings.image_generation_job_max_attempts,
@@ -233,6 +222,39 @@ def build_image_generation_prompt(
             "content": content.payload,
             "style": style,
         },
+    )
+
+
+def build_image_regeneration_prompt(*, original_prompt: str, style: str) -> RenderedPrompt:
+    prompt = _render_image_regeneration_prompt(original_prompt=original_prompt, style=style)
+    while len(prompt.text) > MAX_GENERATION_PROMPT_LENGTH and len(original_prompt) > 1:
+        overflow = len(prompt.text) - MAX_GENERATION_PROMPT_LENGTH
+        original_prompt = original_prompt[: max(1, len(original_prompt) - overflow - 256)]
+        prompt = _render_image_regeneration_prompt(
+            original_prompt=f"{original_prompt}\n[truncated to fit Generation prompt limit]",
+            style=style,
+        )
+    return prompt
+
+
+def _render_image_regeneration_prompt(*, original_prompt: str, style: str) -> RenderedPrompt:
+    return build_advertising_image_prompt(
+        context={
+            "operation": "image_regeneration",
+            "source": "original_image_prompt",
+            "preserve_original_content_context": True,
+        },
+        user_input={
+            "style": style,
+            "instruction": (
+                "Regenerate a new image version from the original prompt below. "
+                "Preserve the original content, business context, composition intent, and "
+                "constraints. Apply only the requested style change when it differs from "
+                "the original."
+            ),
+            "original_prompt": original_prompt,
+        },
+        metadata={"regeneration": True},
     )
 
 
