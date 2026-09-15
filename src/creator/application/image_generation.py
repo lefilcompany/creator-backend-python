@@ -132,8 +132,10 @@ def submit_image_regeneration(
         raise EntityNotFoundError("Image not found")
 
     stored_settings = unit_of_work.settings.get_by_user_id(user.id)
-    resolved_style = style or _style_from_metadata(original_image.metadata) or (
-        stored_settings.visual_style if stored_settings else "photographic"
+    resolved_style = (
+        style
+        or _style_from_metadata(original_image.metadata)
+        or (stored_settings.visual_style if stored_settings else "photographic")
     )
     external_id = image_regeneration_external_id(user.id, idempotency_key)
     request_fingerprint = image_regeneration_request_fingerprint(

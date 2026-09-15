@@ -1221,9 +1221,7 @@ class SqlAlchemyContentRepository:
                     + " "
                     + sql_cast(models.Content.payload, Text)
                 )
-                statement = statement.where(
-                    search_text.like(pattern)
-                )
+                statement = statement.where(search_text.like(pattern))
         if filters.created_from is not None:
             statement = statement.where(models.Content.created_at >= filters.created_from)
         if filters.created_to is not None:
@@ -2127,8 +2125,7 @@ class SqlAlchemyImageGenerationRepository:
             ).where(
                 models.Generation.content_id == content_id,
                 models.Generation.deleted_at.is_(None),
-                func.jsonb_typeof(models.Generation.parameters["image_version_number"])
-                == "number",
+                func.jsonb_typeof(models.Generation.parameters["image_version_number"]) == "number",
             )
         ).scalar_one()
         return max(int(completed_version), int(reserved_version))
