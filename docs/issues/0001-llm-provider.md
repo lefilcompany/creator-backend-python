@@ -5,7 +5,7 @@
 
 ## Papel
 
-Centralizar o progresso de #3, #9, #11, #17, #19, #23 e #27 sem criar uma tarefa duplicada.
+Centralizar o progresso de #3, #9, #11, #13, #17, #19, #23 e #27 sem criar uma tarefa duplicada.
 
 ## Encerramento
 

@@ -2,59 +2,742 @@ openapi: 3.1.0
 info:
   title: Creator API
   version: 0.1.0
-  description: Contract-first API for Creator.
+  description: Contract-first API for Creator, including core Workspace-scoped CRUD resources.
 servers:
   - url: http://localhost:8000
 paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: Application health status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
   /health/live:
     get:
       operationId: liveHealth
       responses:
         '200':
           description: Process is alive.
+  /api/v1/auth/login:
+    post:
+      operationId: loginWithPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthLoginRequest' }
+      responses:
+        '200':
+          description: Supabase Auth session for a Creator Principal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthLoginResponse' }
+        '401': { $ref: '#/components/responses/LoginRejected' }
+        '429': { $ref: '#/components/responses/AuthRateLimited' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
+        '502': { $ref: '#/components/responses/AuthUpstreamFailed' }
+        '504': { $ref: '#/components/responses/AuthTimedOut' }
+  /api/v1/auth/signup:
+    post:
+      operationId: signupWithPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthSignupRequest' }
+      responses:
+        '200':
+          description: Supabase Auth signup result for a Creator Principal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSignupResponse' }
+        '400': { $ref: '#/components/responses/SignupRejected' }
+        '429': { $ref: '#/components/responses/AuthRateLimited' }
+        '500': { $ref: '#/components/responses/SignupFailed' }
+        '502': { $ref: '#/components/responses/AuthUpstreamFailed' }
+        '504': { $ref: '#/components/responses/AuthTimedOut' }
+  /api/v1/users/me:
+    get:
+      operationId: getMyProfile
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200':
+          description: Current authenticated User.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/settings:
+    get:
+      operationId: getMySettings
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200':
+          description: Current authenticated user's Settings, created with defaults on first access.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      operationId: updateMySettings
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettingsUpdateRequest' }
+      responses:
+        '200':
+          description: Current authenticated user's Settings after partial update.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200':
+          description: Paginated Users visible to an admin.
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createUser
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '201':
+          description: User created by an admin.
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/users/{id}:
+    get:
+      operationId: getUser
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: User detail. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateUser
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: User updated by an admin. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteUser
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: User soft-deleted by an admin. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/workspaces:
+    get:
+      operationId: listWorkspaces
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Paginated Workspaces visible by Membership. }
+    post:
+      operationId: createWorkspace
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
+      responses:
+        '201':
+          description: Workspace created with an owner Membership for the authenticated Principal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceCreateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/WorkspaceCreateFailed' }
+  /api/v1/workspaces/{id}:
+    get:
+      operationId: getWorkspace
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Workspace detail. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateWorkspace
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Workspace updated by admin or owner Membership. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteWorkspace
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200':
+          description: Workspace soft-deleted by its owner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceDeleteResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/WorkspaceNotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/WorkspaceDeleteFailed' }
+  /api/v1/brands:
+    get:
+      operationId: listBrands
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Paginated Brands visible by Workspace Membership. }
+    post:
+      operationId: createBrand
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '201': { description: Brand created in a writable Workspace. }
+        '403': { $ref: '#/components/responses/WorkspaceAccessDenied' }
+  /api/v1/brands/{id}:
+    get:
+      operationId: getBrand
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Brand detail. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateBrand
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Brand updated in a writable Workspace. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteBrand
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Brand soft-deleted in a writable Workspace. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/brands/{id}/settings:
+    get:
+      operationId: getBrandSettings
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Brand Settings detail. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: upsertBrandSettings
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Brand Settings upserted. }
+    patch:
+      operationId: updateBrandSettings
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Brand Settings updated. }
+    delete:
+      operationId: deleteBrandSettings
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Brand Settings soft-deleted. }
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Paginated Projects visible by Workspace Membership. }
+    post:
+      operationId: createProject
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '201': { description: Project created in a writable Workspace. }
+  /api/v1/projects/{id}:
+    get:
+      operationId: getProject
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Project detail. }
+    put:
+      operationId: updateProject
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Project updated. }
+    delete:
+      operationId: deleteProject
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Project soft-deleted. }
+  /api/v1/contents:
+    get:
+      operationId: listContents
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Paginated Content visible by Workspace Membership. }
+    post:
+      operationId: createContent
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '201': { description: Content created in a writable Workspace. }
+  /api/v1/contents/{id}:
+    get:
+      operationId: getContent
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Content detail. }
+    put:
+      operationId: updateContent
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Content updated. }
+    delete:
+      operationId: deleteContentCanonical
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Content soft-deleted. }
+  /api/v1/generations:
+    get:
+      operationId: listGenerations
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Paginated Generations visible by Workspace Membership. }
+    post:
+      operationId: createGeneration
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '201': { description: Generation created in a writable Workspace. }
+  /api/v1/generations/{id}:
+    get:
+      operationId: getGeneration
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Generation detail. }
+    put:
+      operationId: updateGeneration
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Generation updated. }
+    delete:
+      operationId: deleteGeneration
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Generation soft-deleted. }
+  /api/v1/assets:
+    get:
+      operationId: listAssets
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Paginated Assets visible by Workspace Membership. }
+    post:
+      operationId: createAsset
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '201': { description: Asset metadata created in a writable Workspace. }
+  /api/v1/assets/{id}:
+    get:
+      operationId: getAsset
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Asset detail. }
+    put:
+      operationId: updateAsset
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Asset metadata updated. }
+    delete:
+      operationId: deleteAsset
+      security:
+        - SupabaseBearerAuth: []
+      responses:
+        '200': { description: Asset soft-deleted. }
   /api/v1/content/generate:
     post:
       operationId: generateContent
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateContentRequest' }
       responses:
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '200':
+          description: Generated text Content persisted for the authenticated user's Workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeneratedContentResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/WorkspaceAccessDenied' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/LlmProviderRateLimited' }
+        '500': { $ref: '#/components/responses/LlmProviderMisconfigured' }
+        '502': { $ref: '#/components/responses/LlmProviderInvalidResponse' }
+        '503': { $ref: '#/components/responses/LlmProviderUnavailable' }
+        '504': { $ref: '#/components/responses/LlmProviderTimedOut' }
   /api/v1/images/generate:
     post:
       operationId: generateImage
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateImageRequest' }
       responses:
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '202':
+          description: Image Generation Job accepted and queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageGenerationStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
+        '503': { $ref: '#/components/responses/QueueEnqueueFailed' }
   /api/v1/images/{id}:
     get:
       operationId: getImage
+      security:
+        - SupabaseBearerAuth: []
       parameters:
         - { $ref: '#/components/parameters/ResourceId' }
       responses:
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '200':
+          description: Current Image Generation Job status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageGenerationStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
+        '502': { $ref: '#/components/responses/StorageUrlUnavailable' }
   /api/v1/content:
     get:
       operationId: listContent
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [-created_at, created_at]
+            default: -created_at
       responses:
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '200':
+          description: Paginated Content visible to the authenticated user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentPageResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
   /api/v1/content/{id}:
     delete:
       operationId: deleteContent
+      security:
+        - SupabaseBearerAuth: []
       parameters:
         - { $ref: '#/components/parameters/ResourceId' }
       responses:
-        '501': { $ref: '#/components/responses/NotImplemented' }
+        '200':
+          description: Content soft-deleted through the legacy singular route.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
 components:
+  securitySchemes:
+    SupabaseBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth access token issued for a Creator Principal.
   parameters:
     ResourceId:
       name: id
       in: path
       required: true
       schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
   responses:
+    LoginRejected:
+      description: Supabase rejected the email and password credentials.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    SignupRejected:
+      description: Supabase rejected the signup request; the error message may include a normalized Supabase Auth reason.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    SignupFailed:
+      description: Supabase Auth is misconfigured or the local signup Workspace bootstrap failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AuthRateLimited:
+      description: Supabase Auth rate limit or quota was exceeded.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AuthTimedOut:
+      description: Supabase Auth did not answer before the configured timeout.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AuthUpstreamFailed:
+      description: Supabase Auth returned an unavailable or invalid upstream response.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing, malformed, expired, or invalid Supabase access token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AuthMisconfigured:
+      description: Authentication is required but Supabase JWT verification is not configured.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceAccessDenied:
+      description: The authenticated user does not have an active Membership for the Workspace.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceNotFound:
+      description: The Workspace does not exist or the authenticated Principal cannot manage it.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceCreateFailed:
+      description: Workspace creation could not be persisted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    WorkspaceDeleteFailed:
+      description: Workspace deletion could not be persisted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: The authenticated Principal is valid but lacks the required role.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderMisconfigured:
+      description: Text generation provider is misconfigured or generated Content could not be persisted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderRateLimited:
+      description: Text generation provider quota or rate limit was exceeded.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderInvalidResponse:
+      description: Text generation provider returned an invalid response.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderUnavailable:
+      description: Text generation provider failed or is temporarily unavailable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmProviderTimedOut:
+      description: Text generation provider did not answer before the configured timeout.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: The requested resource does not exist or is not visible to the authenticated user.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: The request conflicts with an existing resource.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ValidationFailed:
+      description: The request body, path, query, or headers failed validation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    StorageUrlUnavailable:
+      description: The stored object exists but a usable URL could not be issued.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    QueueEnqueueFailed:
+      description: The Image Generation Job could not be enqueued.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     NotImplemented:
       description: Contract reserved for the next implementation issue.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+    AuthSignupRequest:
+      type: object
+      required: [email, password, workspace]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+        workspace: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
+    AuthPrincipal:
+      type: object
+      required: [subject]
+      properties:
+        subject: { type: string, minLength: 1 }
+        email:
+          type: [string, 'null']
+          format: email
+        role:
+          type: [string, 'null']
+    AuthSession:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, principal, provider, metadata]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string }
+        expires_in: { type: integer, minimum: 1 }
+        principal: { $ref: '#/components/schemas/AuthPrincipal' }
+        provider: { type: string, const: supabase }
+        metadata:
+          type: object
+          additionalProperties: true
+    AuthLoginResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/AuthSession' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    AuthSignupResult:
+      type: object
+      required: [principal, session, workspace, membership, confirmation_required, provider, metadata]
+      properties:
+        principal: { $ref: '#/components/schemas/AuthPrincipal' }
+        session:
+          anyOf:
+            - $ref: '#/components/schemas/AuthSession'
+            - type: 'null'
+        workspace: { $ref: '#/components/schemas/Workspace' }
+        membership: { $ref: '#/components/schemas/WorkspaceMembership' }
+        confirmation_required: { type: boolean }
+        provider: { type: string, const: supabase }
+        metadata:
+          type: object
+          additionalProperties: true
+    AuthSignupResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/AuthSignupResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    HealthResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data:
+          type: object
+          required: [status]
+          properties:
+            status: { const: ok }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     ErrorResponse:
       type: object
       required: [success, error, meta]
@@ -66,6 +749,384 @@ components:
           properties:
             code: { type: string }
             message: { type: string }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    User:
+      type: object
+      required: [id, external_id, global_role, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        external_id: { type: string, maxLength: 255 }
+        email:
+          type: [string, 'null']
+          format: email
+          maxLength: 320
+        display_name:
+          type: [string, 'null']
+          maxLength: 255
+        global_role:
+          type: string
+          enum: [admin, gestor, membro]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    Settings:
+      type: object
+      required: [id, user_id, tone, voice, visual_style, default_preferences, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        brand_name:
+          type: [string, 'null']
+          maxLength: 255
+        segment:
+          type: [string, 'null']
+          maxLength: 255
+        tone: { $ref: '#/components/schemas/GenerateContentTone' }
+        voice: { type: string, minLength: 1, maxLength: 1000 }
+        visual_style: { $ref: '#/components/schemas/GenerateImageStyle' }
+        default_preferences:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SettingsUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        brand_name:
+          type: [string, 'null']
+          maxLength: 255
+        segment:
+          type: [string, 'null']
+          maxLength: 255
+        tone: { $ref: '#/components/schemas/GenerateContentTone' }
+        voice: { type: string, minLength: 1, maxLength: 1000 }
+        visual_style: { $ref: '#/components/schemas/GenerateImageStyle' }
+        default_preferences:
+          type: object
+          additionalProperties: true
+    SettingsResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/Settings' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    Workspace:
+      type: object
+      required: [id, name, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 255 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    WorkspaceMembership:
+      type: object
+      required: [id, workspace_id, user_id, role, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        role:
+          type: string
+          enum: [owner, admin, editor, viewer]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    WorkspaceCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+    WorkspaceCreateResult:
+      type: object
+      required: [workspace, membership]
+      properties:
+        workspace: { $ref: '#/components/schemas/Workspace' }
+        membership: { $ref: '#/components/schemas/WorkspaceMembership' }
+    WorkspaceCreateResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/WorkspaceCreateResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    WorkspaceDeleteResult:
+      type: object
+      required: [workspace]
+      properties:
+        workspace: { $ref: '#/components/schemas/Workspace' }
+    WorkspaceDeleteResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/WorkspaceDeleteResult' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    Content:
+      type: object
+      required: [id, workspace_id, type, payload, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        created_by_user_id:
+          type: [string, 'null']
+          format: uuid
+        type:
+          type: string
+          enum: [IMAGE, TEXT]
+        title:
+          type: [string, 'null']
+          maxLength: 255
+        payload:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    Generation:
+      type: object
+      required: [id, workspace_id, content_id, type, model, prompt, parameters, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        requested_by_user_id:
+          type: [string, 'null']
+          format: uuid
+        type:
+          type: string
+          enum: [IMAGE, TEXT]
+        model: { type: string, maxLength: 255 }
+        prompt: { type: string, minLength: 1, maxLength: 20000 }
+        parameters:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    GenerateContentTone:
+      type: string
+      enum: [professional, friendly, persuasive, educational, formal, casual]
+    GenerateContentType:
+      type: string
+      enum: [social_post, email, ad_copy, landing_page, blog_post, product_description]
+    GenerateContentRequest:
+      type: object
+      required: [workspace_id, topic, audience, content_type]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        topic: { type: string, minLength: 1, maxLength: 255 }
+        audience: { type: string, minLength: 1, maxLength: 255 }
+        tone: { $ref: '#/components/schemas/GenerateContentTone' }
+        content_type: { $ref: '#/components/schemas/GenerateContentType' }
+        brand_voice: { type: string, minLength: 1, maxLength: 1000 }
+    GeneratedContentGeneration:
+      type: object
+      required: [id, model, parameters]
+      properties:
+        id: { type: string, format: uuid }
+        model: { type: string, maxLength: 255 }
+        parameters:
+          type: object
+          additionalProperties: true
+    GeneratedContent:
+      allOf:
+        - $ref: '#/components/schemas/Content'
+        - type: object
+          required: [generation]
+          properties:
+            generation: { $ref: '#/components/schemas/GeneratedContentGeneration' }
+    GeneratedContentResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/GeneratedContent' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ContentPage:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Content' }
+        pagination:
+          type: object
+          required: [page, limit, total]
+          properties:
+            page: { type: integer, minimum: 1 }
+            limit: { type: integer, minimum: 1 }
+            total: { type: integer, minimum: 0 }
+    ContentPageResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ContentPage' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    GenerationJobStatus:
+      type: string
+      enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+    GenerateImageStyle:
+      type: string
+      enum: [photographic, illustration, product_render]
+    GenerateImageRequest:
+      type: object
+      required: [content_id]
+      properties:
+        content_id: { type: string, format: uuid }
+        style: { $ref: '#/components/schemas/GenerateImageStyle' }
+    GenerationJob:
+      type: object
+      required: [id, workspace_id, generation_id, status, attempt_count, max_attempts, queued_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        generation_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        external_id:
+          type: [string, 'null']
+          maxLength: 255
+        attempt_count: { type: integer, minimum: 0 }
+        max_attempts: { type: integer, minimum: 1 }
+        failure_code:
+          type: [string, 'null']
+          maxLength: 100
+        failure_message:
+          type: [string, 'null']
+        queued_at: { type: string, format: date-time }
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+        failed_at:
+          type: [string, 'null']
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    GenerationJobStatusEvent:
+      type: object
+      required: [id, generation_job_id, status, occurred_at]
+      properties:
+        id: { type: string, format: uuid }
+        generation_job_id: { type: string, format: uuid }
+        previous_status:
+          anyOf:
+            - $ref: '#/components/schemas/GenerationJobStatus'
+            - type: 'null'
+        status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        occurred_at: { type: string, format: date-time }
+    Image:
+      type: object
+      required: [id, workspace_id, content_id, generation_id, version_number, storage_path, public_url, mime_type, width, height, model, prompt, metadata, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        generation_id: { type: string, format: uuid }
+        version_number: { type: integer, minimum: 1 }
+        storage_path: { type: string, maxLength: 1024 }
+        public_url: { type: string, format: uri, maxLength: 2048 }
+        mime_type:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        model: { type: string, maxLength: 255 }
+        prompt: { type: string, minLength: 1, maxLength: 20000 }
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+    ImageResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/Image' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ImageGenerationStatus:
+      type: object
+      required: [id, content_id, generation_id, status, queued_at, created_at, updated_at, image, failure_code]
+      properties:
+        id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        generation_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        queued_at: { type: string, format: date-time }
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+        failed_at:
+          type: [string, 'null']
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        failure_code:
+          type: [string, 'null']
+          maxLength: 100
+        image:
+          anyOf:
+            - $ref: '#/components/schemas/Image'
+            - type: 'null'
+    ImageGenerationStatusResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ImageGenerationStatus' }
         meta:
           type: object
           required: [request_id]
