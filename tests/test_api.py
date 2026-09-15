@@ -14,7 +14,10 @@ from creator.api.dependencies import (
     get_storage_provider,
     get_uow,
 )
-from creator.application.image_generation import image_generation_request_fingerprint
+from creator.application.image_generation import (
+    image_generation_request_fingerprint,
+    image_regeneration_request_fingerprint,
+)
 from creator.config import Settings, get_settings
 from creator.domain.auth import AuthSession, AuthSignupResult, Principal
 from creator.domain.exceptions import PersistenceError
@@ -268,6 +271,7 @@ class FakeImageGenerationRepository:
         self.created: list[dict[str, object]] = []
         self.status_requests: list[dict[str, UUID]] = []
         self.external_requests: list[dict[str, object]] = []
+        self.image_requests: list[dict[str, object]] = []
 
     def get_status_by_external_id_for_user(
         self,
@@ -296,6 +300,20 @@ class FakeImageGenerationRepository:
     ) -> ImageGenerationStatusRecord | None:
         self.status_requests.append({"user_id": user_id, "job_id": job_id})
         return self.status
+
+    def get_image_for_user(
+        self,
+        *,
+        user_id: UUID,
+        image_id: UUID,
+        include_deleted: bool = False,
+    ) -> ImageRecord | None:
+        self.image_requests.append(
+            {"user_id": user_id, "image_id": image_id, "include_deleted": include_deleted}
+        )
+        if self.status is not None and self.status.image is not None:
+            return self.status.image
+        return None
 
 
 class FakeUserRepository:
@@ -1818,6 +1836,149 @@ async def test_generate_image_rolls_back_when_queue_enqueue_fails() -> None:
             "/api/v1/images/generate",
             headers={"Idempotency-Key": "idem-1"},
             json={"content_id": str(content_id), "style": "photographic"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "QUEUE_ENQUEUE_FAILED"
+    assert unit_of_work.commits == 0
+    assert unit_of_work.rollbacks == 1
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_returns_accepted_job_and_enqueues_work() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    unit_of_work = FakeUnitOfWork(
+        content=content_record(image.content_id),
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+    )
+    queue = FakeGenerationQueue()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: queue
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "illustration"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["success"] is True
+    assert response.json()["data"]["id"] == "50000000-0000-0000-0000-000000000001"
+    assert response.json()["data"]["status"] == "PENDING"
+    assert response.json()["data"]["image"] is None
+    assert queue.calls == [
+        {
+            "job_id": UUID("50000000-0000-0000-0000-000000000001"),
+            "request_id": UUID(response.json()["meta"]["request_id"]),
+        }
+    ]
+    created = unit_of_work.image_generations.created[0]
+    assert created["content_id"] == image.content_id
+    assert created["parameters"]["style"] == "illustration"
+    assert created["parameters"]["regenerated_from_image_id"] == str(image_id)
+    assert created["parameters"]["regenerated_from_generation_id"] == str(image.generation_id)
+    assert created["parameters"]["regenerated_from_version_number"] == image.version_number
+    assert created["external_id"].startswith("image-regenerate:")
+    assert unit_of_work.commits == 1
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_returns_existing_job_for_same_idempotency_key() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    existing = status_record(
+        job_id=UUID("50000000-0000-0000-0000-000000000001"),
+        content_id=image.content_id,
+        request_fingerprint=image_regeneration_request_fingerprint(
+            image_id=image_id,
+            style="photographic",
+        ),
+    )
+    unit_of_work = FakeUnitOfWork(
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+        existing=existing,
+    )
+    queue = FakeGenerationQueue()
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: queue
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "photographic"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["data"]["id"] == "50000000-0000-0000-0000-000000000001"
+    assert queue.calls == []
+    assert unit_of_work.image_generations.created == []
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_returns_not_found_for_invisible_image() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork(status=None)
+    application.dependency_overrides[get_generation_queue] = lambda: FakeGenerationQueue()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "photographic"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "IMAGE_NOT_FOUND"
+
+
+@pytest.mark.anyio
+async def test_regenerate_image_rolls_back_when_queue_enqueue_fails() -> None:
+    image_id = UUID("40000000-0000-0000-0000-000000000001")
+    image = stored_image(image_id)
+    unit_of_work = FakeUnitOfWork(
+        content=content_record(image.content_id),
+        status=status_record(
+            job_id=UUID("51000000-0000-0000-0000-000000000001"),
+            content_id=image.content_id,
+            status=GenerationJobStatus.COMPLETED,
+            image=image,
+        ),
+    )
+    application = authorized_app()
+    application.dependency_overrides[get_uow] = lambda: unit_of_work
+    application.dependency_overrides[get_generation_queue] = lambda: FakeGenerationQueue(
+        error=RuntimeError("redis down")
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/images/{image_id}/regenerate",
+            headers={"Idempotency-Key": "regen-1"},
+            json={"style": "photographic"},
         )
 
     assert response.status_code == 503

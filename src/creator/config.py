@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     gemini_retry_initial_delay_seconds: float = 1.0
     gemini_retry_max_delay_seconds: float = 8.0
     crewai_enabled: bool = False
+    langchain_enabled: bool = False
+    gemini_embedding_model: str = "models/gemini-embedding-001"
+    rag_vector_store_provider: str = "chroma"
+    rag_vector_store_path: str = ".local/rag/chroma"
+    rag_collection_name: str = "creator-content"
+    rag_top_k: int = 5
     generation_queue_name: str = "generations"
     image_generation_job_timeout_seconds: int = 300
     image_generation_job_max_attempts: int = 3

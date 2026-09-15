@@ -45,6 +45,10 @@ class GenerateImageRequest(BaseModel):
     style: Literal["photographic", "illustration", "product_render"] | None = None
 
 
+class RegenerateImageRequest(BaseModel):
+    style: Literal["photographic", "illustration", "product_render"] | None = None
+
+
 class GenerateContentRequest(BaseModel):
     workspace_id: UUID
     topic: str = Field(min_length=1, max_length=255)

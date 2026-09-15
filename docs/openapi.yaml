@@ -466,6 +466,31 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
         '502': { $ref: '#/components/responses/StorageUrlUnavailable' }
+  /api/v1/images/{id}/regenerate:
+    post:
+      operationId: regenerateImage
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegenerateImageRequest' }
+      responses:
+        '202':
+          description: Image regeneration Generation Job accepted and queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageGenerationStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '500': { $ref: '#/components/responses/AuthMisconfigured' }
+        '503': { $ref: '#/components/responses/QueueEnqueueFailed' }
   /api/v1/content:
     get:
       operationId: listContent
@@ -1077,6 +1102,10 @@ components:
       required: [content_id]
       properties:
         content_id: { type: string, format: uuid }
+        style: { $ref: '#/components/schemas/GenerateImageStyle' }
+    RegenerateImageRequest:
+      type: object
+      properties:
         style: { $ref: '#/components/schemas/GenerateImageStyle' }
     GenerationJob:
       type: object

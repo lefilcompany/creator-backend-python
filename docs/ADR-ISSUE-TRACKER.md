@@ -17,6 +17,7 @@ As issues #34 a #43 são issues de acompanhamento - não são tarefas duplicadas
 | [ADR-009](adr/0009-cloud-run-deployment.md) | [#42](https://github.com/lefilcompany/creator-backend-python/issues/42) | #3, #7, #24, #30, #31, #32 |
 | [ADR-010](adr/0010-architecture-governance.md) | [#43](https://github.com/lefilcompany/creator-backend-python/issues/43) | #1, #21, #26, #30, #31, #44 |
 | [ADR-011](adr/0011-crewai-multi-agent-orchestration.md) | [docs/issues/0012](issues/0012-crewai-multi-agent-orchestration.md) | [docs/issues/0013](issues/0013-crewai-adapter.md) |
+| [ADR-012](adr/0012-langchain-rag-tool-calling.md) | [docs/issues/0021](issues/0021-langchain-rag-tool-calling.md) | [docs/issues/0022](issues/0022-langchain-retrieval-adapters.md) |
 
 ## Regras de atualização
 

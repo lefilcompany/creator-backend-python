@@ -33,6 +33,7 @@ from creator.api.schemas import (
     GenerationUpdateRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
+    RegenerateImageRequest,
     SettingsUpdateRequest,
     UserCreateRequest,
     UserUpdateRequest,
@@ -50,6 +51,7 @@ from creator.application.image_generation import (
     IdempotencyConflictError,
     QueueEnqueueError,
     submit_image_generation,
+    submit_image_regeneration,
 )
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings, get_settings
@@ -1572,6 +1574,55 @@ def create_app() -> FastAPI:
                 detail={
                     "code": "QUEUE_ENQUEUE_FAILED",
                     "message": "Image generation could not be queued",
+                },
+            ) from error
+
+        return success_response(_image_generation_status_data(status), request, status_code=202)
+
+    @application.post("/api/v1/images/{id}/regenerate")
+    def regenerate_image(
+        image_id: Annotated[UUID, Path(alias="id")],
+        payload: RegenerateImageRequest,
+        request: Request,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=128)
+        ],
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        queue: Annotated[GenerationQueue, Depends(get_generation_queue)],
+    ) -> JSONResponse:
+        try:
+            request_id = _request_id(request)
+            status = submit_image_regeneration(
+                unit_of_work=unit_of_work,
+                queue=queue,
+                settings=settings,
+                user=current_user,
+                image_id=image_id,
+                style=payload.style,
+                idempotency_key=idempotency_key,
+                request_id=request_id,
+            )
+        except EntityNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "IMAGE_NOT_FOUND", "message": "Image not found"},
+            ) from error
+        except IdempotencyConflictError as error:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Idempotency key was reused with a different request",
+                },
+            ) from error
+        except QueueEnqueueError as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "QUEUE_ENQUEUE_FAILED",
+                    "message": "Image regeneration could not be queued",
                 },
             ) from error
 

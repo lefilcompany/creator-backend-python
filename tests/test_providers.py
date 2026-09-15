@@ -6,6 +6,12 @@ from creator.services.agents.factory import (
     create_multi_agent_orchestrator,
 )
 from creator.services.ai.factory import ProviderNotConfiguredError, create_llm_provider
+from creator.services.retrieval.factory import (
+    RetrievalProviderNotConfiguredError,
+    create_embedding_provider,
+    create_semantic_retriever,
+    create_tool_calling_provider,
+)
 
 
 def test_unconfigured_provider_fails_closed() -> None:
@@ -20,3 +26,24 @@ def test_unconfigured_multi_agent_orchestrator_fails_closed() -> None:
 
     with pytest.raises(AgentOrchestratorNotConfiguredError):
         orchestrator.kickoff("Plan a Workspace content campaign")
+
+
+def test_unconfigured_embedding_provider_fails_closed() -> None:
+    provider = create_embedding_provider(Settings(langchain_enabled=False))
+
+    with pytest.raises(RetrievalProviderNotConfiguredError):
+        provider.embed_query("Find relevant Content")
+
+
+def test_unconfigured_semantic_retriever_fails_closed() -> None:
+    retriever = create_semantic_retriever(Settings(langchain_enabled=False))
+
+    with pytest.raises(RetrievalProviderNotConfiguredError):
+        retriever.search("Find relevant Content", workspace_id="workspace-id")
+
+
+def test_unconfigured_tool_calling_provider_fails_closed() -> None:
+    provider = create_tool_calling_provider(Settings(langchain_enabled=False))
+
+    with pytest.raises(RetrievalProviderNotConfiguredError):
+        provider.invoke_with_tools("Use a safe tool", tools=[])

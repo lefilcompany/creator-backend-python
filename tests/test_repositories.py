@@ -718,7 +718,7 @@ def test_image_generation_repository_lifecycle_paths() -> None:
     session.scalars_results.extend(
         [ScalarResult(processing_job), ScalarResult(generation), ScalarResult(content)]
     )
-    session.execute_results.append(ExecuteResult(1))
+    session.execute_results.extend([ExecuteResult(1), ExecuteResult(1)])
     image = repository.complete_job(
         processing_job.id,
         ImageMetadata(
@@ -773,13 +773,28 @@ def test_image_generation_repository_reserves_image_version_once() -> None:
     session.scalars_results.extend(
         [ScalarResult(job), ScalarResult(generation), ScalarResult(content)]
     )
-    session.execute_results.append(ExecuteResult(4))
+    session.execute_results.extend([ExecuteResult(4), ExecuteResult(4)])
 
     assert repository.reserve_image_version(job.id) == 4
     assert generation.parameters["image_version_number"] == 4
 
     session.scalars_results.extend([ScalarResult(job), ScalarResult(generation)])
     assert repository.reserve_image_version(job.id) == 4
+
+
+def test_image_generation_repository_next_version_includes_reserved_versions() -> None:
+    session = FakeSession()
+    repository = SqlAlchemyImageGenerationRepository(fake_session(session))
+    content = content_row()
+    generation = generation_row(content)
+    job = job_row(generation, GenerationJobStatus.PROCESSING)
+    session.scalars_results.extend(
+        [ScalarResult(job), ScalarResult(generation), ScalarResult(content)]
+    )
+    session.execute_results.extend([ExecuteResult(2), ExecuteResult(5)])
+
+    assert repository.reserve_image_version(job.id) == 5
+    assert generation.parameters["image_version_number"] == 5
 
 
 def test_image_generation_repository_scoped_history_queries() -> None:
