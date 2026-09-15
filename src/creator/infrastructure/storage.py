@@ -233,11 +233,12 @@ class SupabaseStorageProvider:
 
     @property
     def _service_role_key(self) -> str:
-        if not self._settings.supabase_service_role_key:
+        service_role_key = self._settings.supabase_service_role_key
+        if not service_role_key:
             raise StorageConfigurationError(
                 "SUPABASE_SERVICE_ROLE_KEY is required for Supabase Storage"
             )
-        return self._settings.supabase_service_role_key
+        return service_role_key
 
     def _object_url(self, path: str) -> str:
         quoted_path = quote(path, safe="/")
