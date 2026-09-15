@@ -135,9 +135,7 @@ def _parse_provider_output(provider_output: str) -> dict[str, str]:
     text = payload.get("text")
     justification = payload.get("justification")
     if not isinstance(text, str) or not text.strip():
-        raise ContentImprovementInvalidResponseError(
-            "LLM provider did not return improved text"
-        )
+        raise ContentImprovementInvalidResponseError("LLM provider did not return improved text")
     if not isinstance(justification, str) or not justification.strip():
         raise ContentImprovementInvalidResponseError(
             "LLM provider did not return an improvement justification"
