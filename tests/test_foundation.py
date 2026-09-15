@@ -7,6 +7,7 @@ from creator.api.dependencies import Principal, get_principal
 from creator.config import Settings, get_settings
 from creator.infrastructure.db import get_db
 from creator.infrastructure.queue import get_generation_queue
+from creator.services.agents.factory import UnconfiguredMultiAgentOrchestrator
 from creator.services.ai.factory import UnconfiguredLLMProvider
 
 
@@ -49,3 +50,7 @@ def test_queue_factory_uses_generation_queue() -> None:
 
 def test_unconfigured_provider_is_explicit() -> None:
     assert isinstance(UnconfiguredLLMProvider(), UnconfiguredLLMProvider)
+
+
+def test_unconfigured_multi_agent_orchestrator_is_explicit() -> None:
+    assert isinstance(UnconfiguredMultiAgentOrchestrator(), UnconfiguredMultiAgentOrchestrator)

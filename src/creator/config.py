@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = Field(default=None, repr=False)
     gemini_api_key: str | None = Field(default=None, repr=False)
     gemini_text_model: str = "gemini-2.5-flash"
+    crewai_enabled: bool = False
     storage_bucket: str = "creator-images"
 
 
