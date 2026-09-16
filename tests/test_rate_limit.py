@@ -182,9 +182,8 @@ async def test_api_returns_rate_limit_envelope_and_retry_headers() -> None:
         email="principal@example.com",
         role="authenticated",
     )
-    application.dependency_overrides[get_rate_limiter] = lambda: make_limiter(
-        InMemoryRateLimitBackend()
-    )
+    limiter = make_limiter(InMemoryRateLimitBackend())
+    application.dependency_overrides[get_rate_limiter] = lambda: limiter
 
     async with AsyncClient(
         transport=ASGITransport(app=application), base_url="http://test"

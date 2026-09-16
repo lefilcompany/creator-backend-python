@@ -146,7 +146,7 @@ def test_db_dependency_yields_a_session() -> None:
 def test_queue_factory_uses_generation_queue() -> None:
     queue = get_generation_queue()
 
-    assert queue.name == "generations"
+    assert queue.name == "creator:rq:generations"
 
 
 def test_unconfigured_provider_is_explicit() -> None:
