@@ -26,7 +26,7 @@ class RqGenerationQueue:
             "creator.workers.image_generation.run_image_generation",
             str(job_id),
             str(request_id),
-            job_id=f"image-generation:{job_id}",
+            job_id=f"creator:rq:image-generation:{job_id}",
             job_timeout=self._settings.image_generation_job_timeout_seconds,
             retry=Retry(
                 max=max(self._settings.image_generation_job_max_attempts - 1, 0),

@@ -3,6 +3,14 @@ info:
   title: Creator API
   version: 0.1.0
   description: Contract-first API for Creator, including core Workspace-scoped CRUD resources.
+x-rate-limit:
+  applies_to: /api/v1/**
+  default_limit: 5
+  window_seconds: 1
+  identity:
+    authenticated: Principal.subject
+    public_auth: client_ip
+  response: { $ref: '#/components/responses/RateLimitExceeded' }
 servers:
   - url: http://localhost:8000
 paths:
@@ -21,6 +29,15 @@ paths:
       responses:
         '200':
           description: Process is alive.
+  /metrics:
+    get:
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus metrics with bounded labels.
+          content:
+            text/plain:
+              schema: { type: string }
   /api/v1/auth/login:
     post:
       operationId: loginWithPassword
@@ -608,6 +625,33 @@ components:
       required: true
       schema: { type: string, minLength: 1, maxLength: 128 }
   responses:
+    RateLimitExceeded:
+      description: The caller exceeded the configured per-endpoint rate limit.
+      headers:
+        Retry-After:
+          description: Minimum number of seconds before retrying the request.
+          schema: { type: integer, minimum: 1 }
+        RateLimit-Limit:
+          description: Maximum requests permitted in the current window.
+          schema: { type: integer, minimum: 1 }
+        RateLimit-Remaining:
+          description: Requests remaining in the current window.
+          schema: { type: integer, minimum: 0 }
+        RateLimit-Reset:
+          description: Number of seconds until the rate limit window resets.
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    RateLimiterUnavailable:
+      description: The distributed rate limiter is unavailable for an AI generation request.
+      headers:
+        Retry-After:
+          description: Number of seconds before retrying after the rate limiter recovers.
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     LoginRejected:
       description: Supabase rejected the email and password credentials.
       content:

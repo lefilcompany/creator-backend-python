@@ -6,13 +6,15 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from creator.api.dependencies import (
+    enforce_rate_limit,
     get_auth_client,
     get_current_user,
     get_generation_queue,
     get_llm_provider,
+    get_metrics_registry,
     get_storage_provider,
     get_uow,
 )
@@ -75,6 +77,7 @@ from creator.infrastructure.auth import (
     AuthTimeoutError,
     AuthUpstreamError,
 )
+from creator.infrastructure.metrics import MetricsRegistry
 from creator.integrations.gemini.exceptions import (
     GeminiAuthenticationError,
     GeminiBlockedContentError,
@@ -527,8 +530,100 @@ def _not_found(entity: str) -> HTTPException:
     )
 
 
+def _install_rate_limit_openapi(application: FastAPI) -> None:
+    original_openapi = application.openapi
+
+    def custom_openapi() -> dict[str, Any]:
+        if application.openapi_schema:
+            return application.openapi_schema
+
+        schema = original_openapi()
+        components = schema.setdefault("components", {})
+        schemas = components.setdefault("schemas", {})
+        schemas.setdefault(
+            "ErrorResponse",
+            {
+                "type": "object",
+                "required": ["success", "error", "meta"],
+                "properties": {
+                    "success": {"const": False},
+                    "error": {
+                        "type": "object",
+                        "required": ["code", "message"],
+                        "properties": {
+                            "code": {"type": "string"},
+                            "message": {"type": "string"},
+                        },
+                    },
+                    "meta": {
+                        "type": "object",
+                        "required": ["request_id"],
+                        "properties": {"request_id": {"type": "string", "format": "uuid"}},
+                    },
+                },
+            },
+        )
+        responses = components.setdefault("responses", {})
+        responses.setdefault(
+            "RateLimitExceeded",
+            {
+                "description": "The caller exceeded the configured per-endpoint rate limit.",
+                "headers": {
+                    "Retry-After": {"schema": {"type": "integer", "minimum": 1}},
+                    "RateLimit-Limit": {"schema": {"type": "integer", "minimum": 1}},
+                    "RateLimit-Remaining": {"schema": {"type": "integer", "minimum": 0}},
+                    "RateLimit-Reset": {"schema": {"type": "integer", "minimum": 1}},
+                },
+                "content": {
+                    "application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}
+                },
+            },
+        )
+        responses.setdefault(
+            "RateLimiterUnavailable",
+            {
+                "description": "The distributed rate limiter is unavailable.",
+                "headers": {"Retry-After": {"schema": {"type": "integer", "minimum": 1}}},
+                "content": {
+                    "application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}
+                },
+            },
+        )
+
+        generation_paths = {
+            "/api/v1/content/generate",
+            "/api/v1/content/improve",
+            "/api/v1/images/generate",
+            "/api/v1/images/{id}/regenerate",
+        }
+        for path, path_item in schema.get("paths", {}).items():
+            if not path.startswith("/api/v1/"):
+                continue
+            for operation in path_item.values():
+                if not isinstance(operation, dict) or "responses" not in operation:
+                    continue
+                operation["responses"].setdefault(
+                    "429",
+                    {"$ref": "#/components/responses/RateLimitExceeded"},
+                )
+                if path in generation_paths:
+                    operation["responses"].setdefault(
+                        "503", {"$ref": "#/components/responses/RateLimiterUnavailable"}
+                    )
+
+        application.openapi_schema = schema
+        return schema
+
+    application.openapi = custom_openapi  # type: ignore[method-assign]
+
+
 def create_app() -> FastAPI:
-    application = FastAPI(title="Creator API", version="0.1.0")
+    application = FastAPI(
+        title="Creator API",
+        version="0.1.0",
+        dependencies=[Depends(enforce_rate_limit)],
+    )
+    _install_rate_limit_openapi(application)
 
     @application.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -565,6 +660,13 @@ def create_app() -> FastAPI:
     @application.get("/health/live")
     async def live_health(request: Request) -> JSONResponse:
         return success_response({"status": "ok"}, request)
+
+    @application.get("/metrics", include_in_schema=True)
+    def metrics(
+        registry: Annotated[MetricsRegistry, Depends(get_metrics_registry)],
+    ) -> PlainTextResponse:
+        # Keep this endpoint outside /api/v1 so observability cannot consume user quota.
+        return PlainTextResponse(registry.render(), media_type=registry.content_type)
 
     @application.post("/api/v1/auth/login")
     def login_with_password(

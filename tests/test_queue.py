@@ -46,7 +46,7 @@ def test_rq_generation_queue_enqueues_image_job_with_retry_policy(
     settings = Settings(
         _env_file=None,
         redis_url="redis://redis:6379/0",
-        generation_queue_name="generations",
+        generation_queue_name="creator:rq:generations",
         image_generation_job_timeout_seconds=123,
         image_generation_job_max_attempts=4,
         image_generation_retry_interval_seconds=[10, 20, 40],
@@ -61,12 +61,12 @@ def test_rq_generation_queue_enqueues_image_job_with_retry_policy(
 
     created = queues[0]
     call = created.calls[0]
-    assert created.name == "generations"
+    assert created.name == "creator:rq:generations"
     assert created.connection == "connection:redis://redis:6379/0"
     assert created.default_timeout == 123
     assert call["f"] == "creator.workers.image_generation.run_image_generation"
     assert call["args"] == (str(job_id), str(request_id))
-    assert call["job_id"] == f"image-generation:{job_id}"
+    assert call["job_id"] == f"creator:rq:image-generation:{job_id}"
     assert call["job_timeout"] == 123
     assert call["meta"] == {
         "request_id": str(request_id),

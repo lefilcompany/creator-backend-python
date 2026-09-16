@@ -49,6 +49,7 @@ creator-worker image-generation
 ```
 
 Swagger fica disponível em `http://localhost:8000/docs`; ReDoc em `http://localhost:8000/redoc`.
+Métricas agregadas do rate limiter ficam disponíveis em `http://localhost:8000/metrics`.
 Execute a validação local com `ruff check src tests`, `ruff format --check src tests`, `mypy src` e `pytest`. Em ambientes com `make`, `make check` roda o mesmo conjunto.
 
 Para gerar Content de texto ou imagem com Gemini real, configure `GEMINI_API_KEY` no `.env`.

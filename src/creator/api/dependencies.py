@@ -1,6 +1,7 @@
+import logging
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from creator.application.unit_of_work import UnitOfWork
@@ -14,8 +15,14 @@ from creator.infrastructure.auth import (
     create_auth_client,
     create_auth_token_verifier,
 )
+from creator.infrastructure.metrics import MetricsRegistry
 from creator.infrastructure.queue import RqGenerationQueue
 from creator.infrastructure.queue import get_generation_queue as get_rq_generation_queue
+from creator.infrastructure.rate_limit import (
+    RateLimitBackendError,
+    RateLimiter,
+    create_rate_limiter,
+)
 from creator.infrastructure.storage import create_storage_provider
 from creator.infrastructure.unit_of_work import get_unit_of_work
 from creator.repositories import UserRecord
@@ -24,6 +31,7 @@ from creator.services.ai.provider import LLMProvider
 from creator.services.storage.provider import StorageConfigurationError, StorageProvider
 
 bearer_scheme = HTTPBearer(auto_error=False, scheme_name="SupabaseBearerAuth")
+logger = logging.getLogger(__name__)
 
 
 def _auth_exception(
@@ -54,6 +62,37 @@ def get_principal(
     verifier = create_auth_token_verifier(settings)
     try:
         return verifier.verify(token)
+    except AuthConfigurationError as error:
+        if not settings.auth_required:
+            return None
+        raise _auth_exception(
+            "AUTHENTICATION_MISCONFIGURED",
+            "Authentication is not configured",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ) from error
+    except (AccessTokenExpiredError, AccessTokenInvalidError) as error:
+        raise _invalid_auth_exception() from error
+
+
+def get_optional_principal(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
+) -> Principal | None:
+    """Validate a supplied token without making authentication mandatory.
+
+    The global rate-limit dependency must be able to rate-limit public Auth routes
+    by IP before the endpoint's own authentication requirements are evaluated.
+    """
+    token = request.headers.get("Authorization")
+    if not token:
+        return None
+
+    bearer_token = _bearer_token(token)
+    if bearer_token is None:
+        return None
+    verifier = create_auth_token_verifier(settings)
+    try:
+        return verifier.verify(bearer_token)
     except AuthConfigurationError as error:
         if not settings.auth_required:
             return None
@@ -132,6 +171,115 @@ def get_storage_provider(
 
 def get_generation_queue() -> RqGenerationQueue:
     return get_rq_generation_queue()
+
+
+def get_metrics_registry(request: Request) -> MetricsRegistry:
+    registry = getattr(request.app.state, "metrics_registry", None)
+    if not isinstance(registry, MetricsRegistry):
+        registry = MetricsRegistry()
+        request.app.state.metrics_registry = registry
+    return registry
+
+
+def get_rate_limiter(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
+    metrics: Annotated[
+        MetricsRegistry, Depends(get_metrics_registry)
+    ] = None,  # type: ignore[assignment]
+) -> RateLimiter:
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if not isinstance(limiter, RateLimiter):
+        limiter = create_rate_limiter(settings, metrics)
+        request.app.state.rate_limiter = limiter
+    return limiter
+
+
+GENERATION_RATE_LIMIT_ENDPOINTS = frozenset(
+    {
+        "POST /api/v1/content/generate",
+        "POST /api/v1/content/improve",
+        "POST /api/v1/images/generate",
+        "POST /api/v1/images/{id}/regenerate",
+    }
+)
+AUTH_RATE_LIMIT_ENDPOINTS = frozenset(
+    {
+        "POST /api/v1/auth/login",
+        "POST /api/v1/auth/signup",
+    }
+)
+ROUTE_ALIASES = {
+    "GET /api/v1/content": "GET /api/v1/contents",
+    "GET /api/v1/content/{id}": "GET /api/v1/contents/{id}",
+    "DELETE /api/v1/content/{id}": "DELETE /api/v1/contents/{id}",
+}
+
+
+def enforce_rate_limit(
+    request: Request,
+    principal: Annotated[Principal | None, Depends(get_optional_principal)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
+) -> None:
+    path = request.url.path
+    if not path.startswith("/api/v1/"):
+        return
+
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", path)
+    route_key = f"{request.method.upper()} {route_path}"
+    endpoint = ROUTE_ALIASES.get(route_key, route_key)
+    rate_class = "generation" if endpoint in GENERATION_RATE_LIMIT_ENDPOINTS else "cheap"
+
+    if endpoint in AUTH_RATE_LIMIT_ENDPOINTS:
+        client_host = request.client.host if request.client else "unknown"
+        identity = f"ip:{client_host}"
+    elif principal is not None:
+        identity = f"principal:{principal.subject}"
+    else:
+        # The endpoint's authentication dependency remains authoritative.
+        return
+
+    try:
+        decision = limiter.check(
+            rate_class=rate_class,
+            endpoint=endpoint,
+            identity=identity,
+        )
+    except RateLimitBackendError as error:
+        if rate_class == "cheap":
+            logger.warning(
+                "Rate limiter unavailable; allowing cheap request",
+                extra={"rate_limit_class": rate_class, "rate_limit_endpoint": endpoint},
+            )
+            return
+        logger.error(
+            "Rate limiter unavailable; rejecting generation request",
+            extra={"rate_limit_class": rate_class, "rate_limit_endpoint": endpoint},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "RATE_LIMITER_UNAVAILABLE",
+                "message": "Rate limiter is temporarily unavailable",
+            },
+            headers={"Retry-After": "1"},
+        ) from error
+
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "RATE_LIMIT_EXCEEDED",
+                "message": "Rate limit exceeded for this endpoint",
+            },
+            headers={
+                "Retry-After": str(decision.retry_after_seconds),
+                "RateLimit-Limit": str(limiter.limit),
+                "RateLimit-Remaining": str(decision.remaining),
+                "RateLimit-Reset": str(decision.reset_seconds),
+            },
+        )
 
 
 def _invalid_auth_exception() -> HTTPException:

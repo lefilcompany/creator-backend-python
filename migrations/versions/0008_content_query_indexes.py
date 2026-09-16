@@ -1,7 +1,7 @@
 """Add Content query indexes.
 
 Revision ID: 0008_content_query_indexes
-Revises: 0007_user_brand_settings_contract
+Revises: 0007_user_brand_settings
 """
 
 from collections.abc import Sequence
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0008_content_query_indexes"
-down_revision: str | Sequence[str] | None = "0007_user_brand_settings_contract"
+down_revision: str | Sequence[str] | None = "0007_user_brand_settings"
 branch_labels = None
 depends_on = None
 

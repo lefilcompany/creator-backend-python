@@ -58,13 +58,17 @@ def authenticated_app() -> object:
         auth_required=True,
         supabase_url=SUPABASE_URL,
         supabase_jwt_secret=JWT_SECRET,
+        rate_limit_backend="memory",
     )
     return application
 
 
 def unauthenticated_app() -> object:
     application = create_app()
-    application.dependency_overrides[get_settings] = lambda: Settings(auth_required=False)
+    application.dependency_overrides[get_settings] = lambda: Settings(
+        auth_required=False,
+        rate_limit_backend="memory",
+    )
     return application
 
 
@@ -1553,7 +1557,7 @@ async def test_delete_content_is_idempotent_for_accessible_deleted_content() -> 
 @pytest.mark.anyio
 async def test_login_returns_supabase_session_envelope() -> None:
     auth_client = FakeAuthClient()
-    application = create_app()
+    application = unauthenticated_app()
     application.dependency_overrides[get_auth_client] = lambda: auth_client
 
     async with AsyncClient(
@@ -1580,7 +1584,7 @@ async def test_login_returns_supabase_session_envelope() -> None:
 
 @pytest.mark.anyio
 async def test_login_rejects_invalid_credentials_with_structured_error() -> None:
-    application = create_app()
+    application = unauthenticated_app()
     application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(
         AuthLoginRejectedError("rejected")
     )
@@ -1605,7 +1609,7 @@ async def test_signup_returns_created_principal_without_session_when_confirmatio
 ):
     auth_client = FakeAuthClient()
     unit_of_work = FakeUnitOfWork()
-    application = create_app()
+    application = unauthenticated_app()
     application.dependency_overrides[get_auth_client] = lambda: auth_client
     application.dependency_overrides[get_uow] = lambda: unit_of_work
 
@@ -1651,7 +1655,7 @@ async def test_signup_returns_created_principal_without_session_when_confirmatio
 
 @pytest.mark.anyio
 async def test_signup_rejects_invalid_request_with_structured_error() -> None:
-    application = create_app()
+    application = unauthenticated_app()
     application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork()
     application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(
         AuthSignupRejectedError("rejected")
@@ -1672,7 +1676,7 @@ async def test_signup_rejects_invalid_request_with_structured_error() -> None:
 
 @pytest.mark.anyio
 async def test_signup_rejection_includes_normalized_provider_message() -> None:
-    application = create_app()
+    application = unauthenticated_app()
     application.dependency_overrides[get_uow] = lambda: FakeUnitOfWork()
     application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(
         AuthSignupRejectedError(
@@ -1700,7 +1704,7 @@ async def test_signup_rejection_includes_normalized_provider_message() -> None:
 
 @pytest.mark.anyio
 async def test_signup_rolls_back_when_workspace_bootstrap_fails() -> None:
-    application = create_app()
+    application = unauthenticated_app()
     unit_of_work = FakeUnitOfWork(workspace_create_error=PersistenceError("db failed"))
     application.dependency_overrides[get_uow] = lambda: unit_of_work
     application.dependency_overrides[get_auth_client] = lambda: FakeAuthClient()

@@ -13,7 +13,7 @@ As issues #34 a #43 são issues de acompanhamento - não são tarefas duplicadas
 | [ADR-005](adr/0005-postgresql-sqlalchemy-alembic.md) | [#38](https://github.com/lefilcompany/creator-backend-python/issues/38) | #2, #3, #5, #6, #29 |
 | [ADR-006](adr/0006-versioned-api-envelope.md) | [#39](https://github.com/lefilcompany/creator-backend-python/issues/39) | #4, #13, #16, #17, #18, #19, #25, #28 |
 | [ADR-007](adr/0007-openapi-first.md) | [#40](https://github.com/lefilcompany/creator-backend-python/issues/40) | #4, #13, #16, #17, #18, #19, #25, #30, #31 |
-| [ADR-008](adr/0008-api-limits-and-soft-delete.md) | [#41](https://github.com/lefilcompany/creator-backend-python/issues/41) | #5, #13, #15, #18, #22, #25 |
+| [ADR-008](adr/0008-api-limits-and-soft-delete.md) | [#41](https://github.com/lefilcompany/creator-backend-python/issues/41) | #5, #13, #15, #18, #22, #25, [0024](issues/0024-api-rate-limiting.md) |
 | [ADR-009](adr/0009-cloud-run-deployment.md) | [#42](https://github.com/lefilcompany/creator-backend-python/issues/42) | #3, #7, #24, #30, #31, #32 |
 | [ADR-010](adr/0010-architecture-governance.md) | [#43](https://github.com/lefilcompany/creator-backend-python/issues/43) | #1, #21, #26, #30, #31, #44 |
 | [ADR-011](adr/0011-crewai-multi-agent-orchestration.md) | [docs/issues/0012](issues/0012-crewai-multi-agent-orchestration.md) | [docs/issues/0013](issues/0013-crewai-adapter.md) |

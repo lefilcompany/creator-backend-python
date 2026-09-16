@@ -1,6 +1,6 @@
 """Align user Settings with brand preference contract.
 
-Revision ID: 0007_user_brand_settings_contract
+Revision ID: 0007_user_brand_settings
 Revises: 0006_core_resource_crud_tables
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0007_user_brand_settings_contract"
+revision: str = "0007_user_brand_settings"
 down_revision: str | Sequence[str] | None = "0006_core_resource_crud_tables"
 branch_labels = None
 depends_on = None
