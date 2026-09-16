@@ -50,7 +50,10 @@ creator-worker image-generation
 
 Swagger fica disponível em `http://localhost:8000/docs`; ReDoc em `http://localhost:8000/redoc`.
 Métricas agregadas do rate limiter ficam disponíveis em `http://localhost:8000/metrics`.
-Execute a validação local com `ruff check src tests`, `ruff format --check src tests`, `mypy src` e `pytest`. Em ambientes com `make`, `make check` roda o mesmo conjunto.
+Execute a validação local com `make check`; o CI executa exatamente o mesmo alvo.
+Para verificar dependências e secrets, instale o binário do Gitleaks e execute `make security`.
+O pre-commit é opcional: instale `pre-commit`, execute `pre-commit install` e os hooks
+rodarão Ruff e mypy antes de cada commit.
 
 Para gerar Content de texto ou imagem com Gemini real, configure `GEMINI_API_KEY` no `.env`.
 Sem essa chave, os endpoints protegidos continuam disponíveis, mas chamadas de geração retornam

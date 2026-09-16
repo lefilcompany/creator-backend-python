@@ -1,0 +1,11 @@
+title = "Creator secret scanning policy"
+
+[allowlist]
+description = "Exact deterministic placeholders: test JWT fixture, test passwords, test Gemini key, and local Compose database password."
+regexTarget = "match"
+regexes = [
+  '''test-supabase-jwt-secret-with-32-bytes''',
+  '''correct-password''',
+  '''gemini_api_key="secret"''',
+  '''POSTGRES_PASSWORD:\s*creator''',
+]
