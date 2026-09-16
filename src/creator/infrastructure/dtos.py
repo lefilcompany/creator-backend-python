@@ -9,6 +9,13 @@ from sqlalchemy import cast as sql_cast
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from creator.domain.agent_workflow import (
+    AgentWorkflowStatus,
+    AgentWorkflowStepRole,
+    AgentWorkflowStepStatus,
+    HumanReviewMode,
+    can_transition_agent_workflow,
+)
 from creator.domain.exceptions import (
     ConcurrencyError,
     ConflictError,
@@ -19,6 +26,8 @@ from creator.domain.exceptions import (
 from creator.domain.generation import GenerationJobStatus, can_transition
 from creator.infrastructure import models
 from creator.repositories import (
+    AgentWorkflowRunRecord,
+    AgentWorkflowStepRecord,
     AssetRecord,
     BrandRecord,
     BrandSettingsRecord,
@@ -192,6 +201,59 @@ def _generation_record(row: models.Generation) -> GenerationRecord:
         model=row.model,
         prompt=row.prompt,
         parameters=_json(row.parameters),
+        created_at=_datetime(row.created_at),
+        updated_at=_datetime(row.updated_at),
+        deleted_at=_optional_datetime(row.deleted_at),
+    )
+
+
+def _agent_workflow_run_record(row: models.AgentWorkflowRun) -> AgentWorkflowRunRecord:
+    return AgentWorkflowRunRecord(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        content_id=row.content_id,
+        brand_id=row.brand_id,
+        requested_by_user_id=row.requested_by_user_id,
+        idempotency_key=row.idempotency_key,
+        request_fingerprint=row.request_fingerprint,
+        status=row.status,
+        human_review=row.human_review,
+        max_refinements=row.max_refinements,
+        refinement_count=row.refinement_count,
+        current_step=row.current_step,
+        input=_json(row.input_json),
+        final_image_ids=[str(value) for value in (row.final_image_ids or [])],
+        failure_code=row.failure_code,
+        failure_message=row.failure_message,
+        created_at=_datetime(row.created_at),
+        updated_at=_datetime(row.updated_at),
+        completed_at=_optional_datetime(row.completed_at),
+        deleted_at=_optional_datetime(row.deleted_at),
+    )
+
+
+def _agent_workflow_step_record(row: models.AgentWorkflowStep) -> AgentWorkflowStepRecord:
+    return AgentWorkflowStepRecord(
+        id=row.id,
+        run_id=row.run_id,
+        workspace_id=row.workspace_id,
+        sequence_number=row.sequence_number,
+        role=row.role,
+        status=row.status,
+        attempt=row.attempt,
+        input=_json(row.input_json),
+        output=_json(row.output_json),
+        prompt=row.prompt,
+        prompt_template_id=row.prompt_template_id,
+        prompt_template_version=row.prompt_template_version,
+        input_hash=row.input_hash,
+        provider=row.provider,
+        model=row.model,
+        decision=row.decision,
+        error_code=row.error_code,
+        error_message=row.error_message,
+        started_at=_optional_datetime(row.started_at),
+        completed_at=_optional_datetime(row.completed_at),
         created_at=_datetime(row.created_at),
         updated_at=_datetime(row.updated_at),
         deleted_at=_optional_datetime(row.deleted_at),
@@ -1608,6 +1670,230 @@ class SqlAlchemyBrandSettingsRepository:
 
     def _scoped_select(self, user_id: UUID) -> Select[tuple[models.BrandSettings]]:
         return _scoped_resource_select(user_id, models.BrandSettings)
+
+
+class SqlAlchemyAgentWorkflowRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def create_run(
+        self,
+        *,
+        user_id: UUID,
+        workspace_id: UUID,
+        content_id: UUID,
+        brand_id: UUID,
+        idempotency_key: str,
+        request_fingerprint: str,
+        input: JsonObject,
+        human_review: HumanReviewMode,
+        max_refinements: int,
+    ) -> AgentWorkflowRunRecord:
+        if not _user_has_workspace_role(
+            self._session, user_id=user_id, workspace_id=workspace_id, minimum_role="editor"
+        ):
+            raise EntityNotFoundError("Workspace not found")
+        row = models.AgentWorkflowRun(
+            workspace_id=workspace_id,
+            content_id=content_id,
+            brand_id=brand_id,
+            requested_by_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint,
+            human_review=human_review,
+            max_refinements=max_refinements,
+            input_json=_json(input),
+        )
+        self._session.add(row)
+        flush_or_raise(self._session)
+        return _agent_workflow_run_record(row)
+
+    def get_for_user(self, *, user_id: UUID, run_id: UUID) -> AgentWorkflowRunRecord | None:
+        row = self._session.scalars(
+            self._scoped_select(user_id).where(models.AgentWorkflowRun.id == run_id)
+        ).one_or_none()
+        return _agent_workflow_run_record(row) if row else None
+
+    def get_by_idempotency(
+        self, *, user_id: UUID, workspace_id: UUID, idempotency_key: str
+    ) -> AgentWorkflowRunRecord | None:
+        statement = self._scoped_select(user_id).where(
+            models.AgentWorkflowRun.workspace_id == workspace_id,
+            models.AgentWorkflowRun.idempotency_key == idempotency_key,
+        )
+        row = self._session.scalars(statement).one_or_none()
+        return _agent_workflow_run_record(row) if row else None
+
+    def get_internal(self, run_id: UUID) -> AgentWorkflowRunRecord | None:
+        row = self._session.scalars(
+            select(models.AgentWorkflowRun).where(
+                models.AgentWorkflowRun.id == run_id,
+                models.AgentWorkflowRun.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        return _agent_workflow_run_record(row) if row else None
+
+    def list_steps_for_user(
+        self, *, user_id: UUID, run_id: UUID
+    ) -> list[AgentWorkflowStepRecord] | None:
+        run = self.get_for_user(user_id=user_id, run_id=run_id)
+        if run is None:
+            return None
+        rows = self._session.scalars(
+            select(models.AgentWorkflowStep)
+            .where(
+                models.AgentWorkflowStep.run_id == run_id,
+                models.AgentWorkflowStep.workspace_id == run.workspace_id,
+                models.AgentWorkflowStep.deleted_at.is_(None),
+            )
+            .order_by(
+                models.AgentWorkflowStep.sequence_number.asc(),
+                models.AgentWorkflowStep.attempt.asc(),
+            )
+        ).all()
+        return [_agent_workflow_step_record(row) for row in rows]
+
+    def list_steps_internal(self, run_id: UUID) -> list[AgentWorkflowStepRecord]:
+        rows = self._session.scalars(
+            select(models.AgentWorkflowStep)
+            .where(
+                models.AgentWorkflowStep.run_id == run_id,
+                models.AgentWorkflowStep.deleted_at.is_(None),
+            )
+            .order_by(
+                models.AgentWorkflowStep.sequence_number.asc(),
+                models.AgentWorkflowStep.attempt.asc(),
+            )
+        ).all()
+        return [_agent_workflow_step_record(row) for row in rows]
+
+    def add_step(
+        self,
+        *,
+        run_id: UUID,
+        workspace_id: UUID,
+        sequence_number: int,
+        role: AgentWorkflowStepRole,
+        attempt: int,
+        input: JsonObject,
+    ) -> AgentWorkflowStepRecord:
+        row = models.AgentWorkflowStep(
+            run_id=run_id,
+            workspace_id=workspace_id,
+            sequence_number=sequence_number,
+            role=role,
+            attempt=attempt,
+            input_json=_json(input),
+            status=AgentWorkflowStepStatus.RUNNING,
+            started_at=_now(),
+        )
+        self._session.add(row)
+        flush_or_raise(self._session)
+        return _agent_workflow_step_record(row)
+
+    def complete_step(
+        self,
+        step_id: UUID,
+        *,
+        output: JsonObject,
+        prompt: str | None = None,
+        prompt_template_id: str | None = None,
+        prompt_template_version: str | None = None,
+        input_hash: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        decision: str | None = None,
+    ) -> AgentWorkflowStepRecord:
+        row = self._session.scalars(
+            select(models.AgentWorkflowStep).where(
+                models.AgentWorkflowStep.id == step_id,
+                models.AgentWorkflowStep.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        if row is None:
+            raise EntityNotFoundError("Agent workflow step not found")
+        row.status = AgentWorkflowStepStatus.COMPLETED
+        row.output_json = _json(output)
+        row.prompt = prompt
+        row.prompt_template_id = prompt_template_id
+        row.prompt_template_version = prompt_template_version
+        row.input_hash = input_hash
+        row.provider = provider
+        row.model = model
+        row.decision = decision
+        row.completed_at = _now()
+        row.updated_at = _now()
+        flush_or_raise(self._session)
+        return _agent_workflow_step_record(row)
+
+    def fail_step(self, step_id: UUID, *, error_code: str, error_message: str) -> None:
+        row = self._session.scalars(
+            select(models.AgentWorkflowStep).where(models.AgentWorkflowStep.id == step_id)
+        ).one_or_none()
+        if row is None:
+            raise EntityNotFoundError("Agent workflow step not found")
+        row.status = AgentWorkflowStepStatus.FAILED
+        row.error_code = error_code
+        row.error_message = error_message[:2_000]
+        row.completed_at = _now()
+        row.updated_at = _now()
+        flush_or_raise(self._session)
+
+    def transition(
+        self,
+        run_id: UUID,
+        target: AgentWorkflowStatus,
+        *,
+        current_step: str | None = None,
+        refinement_count: int | None = None,
+        final_image_ids: list[str] | None = None,
+        failure_code: str | None = None,
+        failure_message: str | None = None,
+    ) -> AgentWorkflowRunRecord:
+        row = self._session.scalars(
+            select(models.AgentWorkflowRun)
+            .where(
+                models.AgentWorkflowRun.id == run_id, models.AgentWorkflowRun.deleted_at.is_(None)
+            )
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
+            raise EntityNotFoundError("Agent workflow not found")
+        if not can_transition_agent_workflow(row.status, target):
+            raise InvalidStateTransitionError(f"Cannot transition {row.status} to {target}")
+        row.status = target
+        if current_step is not None:
+            row.current_step = current_step
+        if refinement_count is not None:
+            row.refinement_count = refinement_count
+        if final_image_ids is not None:
+            row.final_image_ids = list(final_image_ids)
+        if failure_code is not None:
+            row.failure_code = failure_code
+        if failure_message is not None:
+            row.failure_message = failure_message[:2_000]
+        if target == AgentWorkflowStatus.COMPLETED:
+            row.completed_at = _now()
+        row.updated_at = _now()
+        flush_or_raise(self._session)
+        return _agent_workflow_run_record(row)
+
+    def update_input(self, run_id: UUID, input: JsonObject) -> AgentWorkflowRunRecord:
+        row = self._session.scalars(
+            select(models.AgentWorkflowRun).where(
+                models.AgentWorkflowRun.id == run_id,
+                models.AgentWorkflowRun.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        if row is None:
+            raise EntityNotFoundError("Agent workflow not found")
+        row.input_json = _json(input)
+        row.updated_at = _now()
+        flush_or_raise(self._session)
+        return _agent_workflow_run_record(row)
+
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.AgentWorkflowRun]]:
+        return _scoped_resource_select(user_id, models.AgentWorkflowRun)
 
 
 class SqlAlchemyImageGenerationRepository:

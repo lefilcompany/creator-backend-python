@@ -539,6 +539,86 @@ paths:
         '502': { $ref: '#/components/responses/LlmProviderInvalidResponse' }
         '503': { $ref: '#/components/responses/LlmProviderUnavailable' }
         '504': { $ref: '#/components/responses/LlmProviderTimedOut' }
+  /api/v1/generations/image-workflows:
+    post:
+      operationId: createImageAgentWorkflow
+      tags: [Generations]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImageWorkflowRequest' }
+      responses:
+        '202':
+          description: Specialist-agent image workflow accepted and queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageWorkflowResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/QueueEnqueueFailed' }
+  /api/v1/generations/image-workflows/{id}:
+    get:
+      operationId: getImageAgentWorkflow
+      tags: [Generations]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Current specialist-agent image workflow status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageWorkflowResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/generations/image-workflows/{id}/steps:
+    get:
+      operationId: listImageAgentWorkflowSteps
+      tags: [Generations]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Auditable specialist-agent workflow steps.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageWorkflowStepsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/generations/image-workflows/{id}/decision:
+    post:
+      operationId: decideImageAgentWorkflow
+      tags: [Generations]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImageWorkflowDecisionRequest' }
+      responses:
+        '200':
+          description: Human decision applied to the workflow.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageWorkflowResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '503': { $ref: '#/components/responses/QueueEnqueueFailed' }
   /api/v1/images/generate:
     post:
       operationId: generateImage
@@ -1320,6 +1400,100 @@ components:
     GenerationJobStatus:
       type: string
       enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+    ImageWorkflowStatus:
+      type: string
+      enum: [PENDING, RUNNING, WAITING_FOR_HUMAN_REVIEW, REFINING, COMPLETED, REJECTED, FAILED]
+    ImageWorkflowRequest:
+      type: object
+      required: [brand_id, campaign, persona]
+      additionalProperties: false
+      properties:
+        brand_id: { type: string, format: uuid }
+        campaign: { type: string, minLength: 1, maxLength: 4000 }
+        persona: { type: string, minLength: 1, maxLength: 2000 }
+        quantity: { type: integer, minimum: 1, maximum: 20, default: 1 }
+        extra_instructions: { type: [string, 'null'], maxLength: 4000 }
+        human_review: { type: string, enum: [AUTO, OPTIONAL], default: AUTO }
+        max_refinements: { type: [integer, 'null'], minimum: 0, maximum: 10 }
+        extensions: { type: object, additionalProperties: true }
+    ImageWorkflowDecisionRequest:
+      type: object
+      required: [decision]
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [APPROVE, REFINE, REJECT] }
+        feedback: { type: [string, 'null'], maxLength: 4000 }
+    ImageWorkflow:
+      type: object
+      required: [id, workspace_id, content_id, brand_id, status, human_review, max_refinements, refinement_count, input, final_image_ids, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        content_id: { type: string, format: uuid }
+        brand_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ImageWorkflowStatus' }
+        human_review: { type: string, enum: [AUTO, OPTIONAL] }
+        max_refinements: { type: integer, minimum: 0, maximum: 10 }
+        refinement_count: { type: integer, minimum: 0 }
+        current_step: { type: [string, 'null'] }
+        input: { type: object, additionalProperties: true }
+        final_image_ids:
+          type: array
+          items: { type: string, format: uuid }
+        failure_code: { type: [string, 'null'] }
+        failure_message: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+    ImageWorkflowStep:
+      type: object
+      required: [id, run_id, sequence_number, role, status, attempt, input, output]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        sequence_number: { type: integer, minimum: 1 }
+        role: { type: string, enum: [BUSINESS, PLANNER, WRITER, ARTIST, REVIEWER, DELIVERY] }
+        status: { type: string, enum: [PENDING, RUNNING, COMPLETED, FAILED] }
+        attempt: { type: integer, minimum: 1 }
+        input: { type: object, additionalProperties: true }
+        output: { type: object, additionalProperties: true }
+        prompt: { type: [string, 'null'] }
+        prompt_template_id: { type: [string, 'null'] }
+        prompt_template_version: { type: [string, 'null'] }
+        input_hash: { type: [string, 'null'] }
+        provider: { type: [string, 'null'] }
+        model: { type: [string, 'null'] }
+        decision: { type: [string, 'null'] }
+        error_code: { type: [string, 'null'] }
+        error_message: { type: [string, 'null'] }
+    ImageWorkflowResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data: { $ref: '#/components/schemas/ImageWorkflow' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
+    ImageWorkflowStepsResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { const: true }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/ImageWorkflowStep' }
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id: { type: string, format: uuid }
     GenerateImageStyle:
       type: string
       enum: [photographic, illustration, product_render]

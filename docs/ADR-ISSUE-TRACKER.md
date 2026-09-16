@@ -19,6 +19,7 @@ As issues #34 a #43 são issues de acompanhamento - não são tarefas duplicadas
 | [ADR-011](adr/0011-crewai-multi-agent-orchestration.md) | [docs/issues/0012](issues/0012-crewai-multi-agent-orchestration.md) | [docs/issues/0013](issues/0013-crewai-adapter.md) |
 | [ADR-012](adr/0012-langchain-rag-tool-calling.md) | [docs/issues/0021](issues/0021-langchain-rag-tool-calling.md) | [docs/issues/0022](issues/0022-langchain-retrieval-adapters.md), #49 |
 | [ADR-013](adr/0013-content-improvement-preview.md) | [docs/issues/0023](issues/0023-content-improvement-preview.md) | [docs/issues/0023](issues/0023-content-improvement-preview.md) |
+| [ADR-014](adr/0014-agent-image-generation-workflow.md) | [#56](https://github.com/lefilcompany/creator-backend-python/issues/56), [docs/issues/0032](issues/0032-agent-image-generation-workflow.md) | #57, #58, #59, #60; [docs/issues/0033](issues/0033-agent-workflow-persistence.md), [docs/issues/0034](issues/0034-specialist-agent-contracts.md), [docs/issues/0035](issues/0035-multimodal-image-reviewer.md), [docs/issues/0036](issues/0036-agent-workflow-api-worker.md) |
 
 ## Regras de atualização
 

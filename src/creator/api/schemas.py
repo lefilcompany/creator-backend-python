@@ -49,6 +49,26 @@ class RegenerateImageRequest(BaseModel):
     style: Literal["photographic", "illustration", "product_render"] | None = None
 
 
+class ImageWorkflowRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brand_id: UUID
+    campaign: str = Field(min_length=1, max_length=4_000)
+    persona: str = Field(min_length=1, max_length=2_000)
+    quantity: int = Field(default=1, ge=1, le=20)
+    extra_instructions: str | None = Field(default=None, max_length=4_000)
+    human_review: Literal["AUTO", "OPTIONAL"] = "AUTO"
+    max_refinements: int | None = Field(default=None, ge=0, le=10)
+    extensions: dict[str, object] = Field(default_factory=dict)
+
+
+class ImageWorkflowDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["APPROVE", "REFINE", "REJECT"]
+    feedback: str | None = Field(default=None, max_length=4_000)
+
+
 class GenerateContentRequest(BaseModel):
     workspace_id: UUID
     topic: str = Field(min_length=1, max_length=255)

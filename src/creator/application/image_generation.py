@@ -21,6 +21,8 @@ MAX_GENERATION_PROMPT_LENGTH = 20_000
 class GenerationQueue(Protocol):
     def enqueue_image_generation(self, *, job_id: UUID, request_id: UUID) -> object: ...
 
+    def enqueue_agent_workflow(self, *, run_id: UUID, request_id: UUID) -> object: ...
+
 
 class IdempotencyConflictError(ConflictError):
     """Raised when an idempotency key is reused with a different request."""
