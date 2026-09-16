@@ -108,6 +108,20 @@ from creator.repositories.common import PageRequest
 from creator.services.ai.provider import LLMProvider, ProviderNotConfiguredError
 from creator.services.storage.provider import StorageProvider, StorageUrlError
 
+OPENAPI_TAGS = [
+    {"name": "System", "description": "Health, liveness and operational endpoints."},
+    {"name": "Auth", "description": "Authentication and signup endpoints."},
+    {"name": "Users", "description": "User profile and administration endpoints."},
+    {"name": "Settings", "description": "Authenticated Principal settings endpoints."},
+    {"name": "Workspaces", "description": "Workspace lifecycle endpoints."},
+    {"name": "Brands", "description": "Brand and Brand Settings endpoints."},
+    {"name": "Projects", "description": "Project endpoints."},
+    {"name": "Contents", "description": "Content CRUD and content workflow endpoints."},
+    {"name": "Generations", "description": "Generation lifecycle endpoints."},
+    {"name": "Assets", "description": "Asset metadata endpoints."},
+    {"name": "Images", "description": "Image generation and retrieval endpoints."},
+]
+
 
 def _request_id(request: Request | None = None) -> UUID:
     if request is None:
@@ -621,6 +635,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="Creator API",
         version="0.1.0",
+        openapi_tags=OPENAPI_TAGS,
         dependencies=[Depends(enforce_rate_limit)],
     )
     _install_rate_limit_openapi(application)
@@ -653,22 +668,22 @@ def create_app() -> FastAPI:
             request=request,
         )
 
-    @application.get("/health")
+    @application.get("/health", tags=["System"])
     async def health(request: Request) -> JSONResponse:
         return success_response({"status": "ok"}, request)
 
-    @application.get("/health/live")
+    @application.get("/health/live", tags=["System"])
     async def live_health(request: Request) -> JSONResponse:
         return success_response({"status": "ok"}, request)
 
-    @application.get("/metrics", include_in_schema=True)
+    @application.get("/metrics", include_in_schema=True, tags=["System"])
     def metrics(
         registry: Annotated[MetricsRegistry, Depends(get_metrics_registry)],
     ) -> PlainTextResponse:
         # Keep this endpoint outside /api/v1 so observability cannot consume user quota.
         return PlainTextResponse(registry.render(), media_type=registry.content_type)
 
-    @application.post("/api/v1/auth/login")
+    @application.post("/api/v1/auth/login", tags=["Auth"])
     def login_with_password(
         payload: AuthLoginRequest,
         request: Request,
@@ -730,7 +745,7 @@ def create_app() -> FastAPI:
 
         return success_response(_auth_session_data(session), request)
 
-    @application.post("/api/v1/auth/signup")
+    @application.post("/api/v1/auth/signup", tags=["Auth"])
     def signup_with_password(
         payload: AuthSignupRequest,
         request: Request,
@@ -812,14 +827,14 @@ def create_app() -> FastAPI:
             request,
         )
 
-    @application.get("/api/v1/users/me")
+    @application.get("/api/v1/users/me", tags=["Users"])
     def get_my_profile(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
     ) -> JSONResponse:
         return success_response(_user_data(current_user), request)
 
-    @application.get("/api/v1/settings")
+    @application.get("/api/v1/settings", tags=["Settings"])
     def get_my_settings(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -829,7 +844,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_settings_data(settings), request)
 
-    @application.patch("/api/v1/settings")
+    @application.patch("/api/v1/settings", tags=["Settings"])
     def update_my_settings(
         payload: SettingsUpdateRequest,
         request: Request,
@@ -842,7 +857,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_settings_data(settings), request)
 
-    @application.get("/api/v1/users")
+    @application.get("/api/v1/users", tags=["Users"])
     def list_users(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -855,7 +870,7 @@ def create_app() -> FastAPI:
         users = unit_of_work.users.list(page=_page_request(page, limit, sort))
         return success_response(_page_data(users, _user_data), request)
 
-    @application.post("/api/v1/users")
+    @application.post("/api/v1/users", tags=["Users"])
     def create_user(
         payload: UserCreateRequest,
         request: Request,
@@ -872,7 +887,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_user_data(user), request, status_code=201)
 
-    @application.get("/api/v1/users/{id}")
+    @application.get("/api/v1/users/{id}", tags=["Users"])
     def get_user(
         user_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -885,7 +900,7 @@ def create_app() -> FastAPI:
             raise _not_found("User")
         return success_response(_user_data(user), request)
 
-    @application.put("/api/v1/users/{id}")
+    @application.put("/api/v1/users/{id}", tags=["Users"])
     def update_user(
         user_id: Annotated[UUID, Path(alias="id")],
         payload: UserUpdateRequest,
@@ -906,7 +921,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_user_data(user), request)
 
-    @application.delete("/api/v1/users/{id}")
+    @application.delete("/api/v1/users/{id}", tags=["Users"])
     def delete_user(
         user_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -921,7 +936,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.get("/api/v1/workspaces")
+    @application.get("/api/v1/workspaces", tags=["Workspaces"])
     def list_workspaces(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -936,7 +951,7 @@ def create_app() -> FastAPI:
         )
         return success_response(_page_data(workspaces, _workspace_data), request)
 
-    @application.post("/api/v1/workspaces")
+    @application.post("/api/v1/workspaces", tags=["Workspaces"])
     def create_workspace(
         payload: WorkspaceCreateRequest,
         request: Request,
@@ -957,7 +972,7 @@ def create_app() -> FastAPI:
             status_code=201,
         )
 
-    @application.get("/api/v1/workspaces/{id}")
+    @application.get("/api/v1/workspaces/{id}", tags=["Workspaces"])
     def get_workspace(
         workspace_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -972,7 +987,7 @@ def create_app() -> FastAPI:
             raise _not_found("Workspace")
         return success_response(_workspace_data(workspace), request)
 
-    @application.put("/api/v1/workspaces/{id}")
+    @application.put("/api/v1/workspaces/{id}", tags=["Workspaces"])
     def update_workspace(
         workspace_id: Annotated[UUID, Path(alias="id")],
         payload: WorkspaceUpdateRequest,
@@ -991,7 +1006,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_workspace_data(workspace), request)
 
-    @application.delete("/api/v1/workspaces/{id}")
+    @application.delete("/api/v1/workspaces/{id}", tags=["Workspaces"])
     def delete_workspace(
         workspace_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1008,7 +1023,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"workspace": _workspace_data(workspace)}, request)
 
-    @application.get("/api/v1/brands")
+    @application.get("/api/v1/brands", tags=["Brands"])
     def list_brands(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -1025,7 +1040,7 @@ def create_app() -> FastAPI:
         )
         return success_response(_page_data(brands, _brand_data), request)
 
-    @application.post("/api/v1/brands")
+    @application.post("/api/v1/brands", tags=["Brands"])
     def create_brand(
         payload: BrandCreateRequest,
         request: Request,
@@ -1046,7 +1061,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_brand_data(brand), request, status_code=201)
 
-    @application.get("/api/v1/brands/{id}")
+    @application.get("/api/v1/brands/{id}", tags=["Brands"])
     def get_brand(
         brand_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1058,7 +1073,7 @@ def create_app() -> FastAPI:
             raise _not_found("Brand")
         return success_response(_brand_data(brand), request)
 
-    @application.put("/api/v1/brands/{id}")
+    @application.put("/api/v1/brands/{id}", tags=["Brands"])
     def update_brand(
         brand_id: Annotated[UUID, Path(alias="id")],
         payload: BrandUpdateRequest,
@@ -1080,7 +1095,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_brand_data(brand), request)
 
-    @application.delete("/api/v1/brands/{id}")
+    @application.delete("/api/v1/brands/{id}", tags=["Brands"])
     def delete_brand(
         brand_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1094,7 +1109,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.get("/api/v1/brands/{id}/settings")
+    @application.get("/api/v1/brands/{id}/settings", tags=["Brands"])
     def get_brand_settings(
         brand_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1109,7 +1124,7 @@ def create_app() -> FastAPI:
             raise _not_found("Brand settings")
         return success_response(_brand_settings_data(settings), request)
 
-    @application.put("/api/v1/brands/{id}/settings")
+    @application.put("/api/v1/brands/{id}/settings", tags=["Brands"])
     def upsert_brand_settings(
         brand_id: Annotated[UUID, Path(alias="id")],
         payload: BrandSettingsUpsertRequest,
@@ -1132,7 +1147,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_brand_settings_data(settings), request)
 
-    @application.patch("/api/v1/brands/{id}/settings")
+    @application.patch("/api/v1/brands/{id}/settings", tags=["Brands"])
     def update_brand_settings(
         brand_id: Annotated[UUID, Path(alias="id")],
         payload: BrandSettingsUpdateRequest,
@@ -1154,7 +1169,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_brand_settings_data(settings), request)
 
-    @application.delete("/api/v1/brands/{id}/settings")
+    @application.delete("/api/v1/brands/{id}/settings", tags=["Brands"])
     def delete_brand_settings(
         brand_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1168,7 +1183,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.get("/api/v1/projects")
+    @application.get("/api/v1/projects", tags=["Projects"])
     def list_projects(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -1187,7 +1202,7 @@ def create_app() -> FastAPI:
         )
         return success_response(_page_data(projects, _project_data), request)
 
-    @application.post("/api/v1/projects")
+    @application.post("/api/v1/projects", tags=["Projects"])
     def create_project(
         payload: ProjectCreateRequest,
         request: Request,
@@ -1209,7 +1224,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_project_data(project), request, status_code=201)
 
-    @application.get("/api/v1/projects/{id}")
+    @application.get("/api/v1/projects/{id}", tags=["Projects"])
     def get_project(
         project_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1224,7 +1239,7 @@ def create_app() -> FastAPI:
             raise _not_found("Project")
         return success_response(_project_data(project), request)
 
-    @application.put("/api/v1/projects/{id}")
+    @application.put("/api/v1/projects/{id}", tags=["Projects"])
     def update_project(
         project_id: Annotated[UUID, Path(alias="id")],
         payload: ProjectUpdateRequest,
@@ -1246,7 +1261,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_project_data(project), request)
 
-    @application.delete("/api/v1/projects/{id}")
+    @application.delete("/api/v1/projects/{id}", tags=["Projects"])
     def delete_project(
         project_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1260,7 +1275,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.post("/api/v1/contents")
+    @application.post("/api/v1/contents", tags=["Contents"])
     def create_content(
         payload: ContentCreateRequest,
         request: Request,
@@ -1282,8 +1297,8 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_content_data(content), request, status_code=201)
 
-    @application.get("/api/v1/contents/{id}")
-    @application.get("/api/v1/content/{id}")
+    @application.get("/api/v1/contents/{id}", tags=["Contents"])
+    @application.get("/api/v1/content/{id}", tags=["Contents"])
     def get_content(
         content_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1298,7 +1313,7 @@ def create_app() -> FastAPI:
             raise _not_found("Content")
         return success_response(_content_detail_data(detail), request)
 
-    @application.put("/api/v1/contents/{id}")
+    @application.put("/api/v1/contents/{id}", tags=["Contents"])
     def update_content(
         content_id: Annotated[UUID, Path(alias="id")],
         payload: ContentUpdateRequest,
@@ -1328,8 +1343,8 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_content_data(content), request)
 
-    @application.delete("/api/v1/contents/{id}")
-    @application.delete("/api/v1/content/{id}")
+    @application.delete("/api/v1/contents/{id}", tags=["Contents"])
+    @application.delete("/api/v1/content/{id}", tags=["Contents"])
     def delete_content(
         content_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1353,7 +1368,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.get("/api/v1/generations")
+    @application.get("/api/v1/generations", tags=["Generations"])
     def list_generations(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -1372,7 +1387,7 @@ def create_app() -> FastAPI:
         )
         return success_response(_page_data(generations, _generation_data), request)
 
-    @application.post("/api/v1/generations")
+    @application.post("/api/v1/generations", tags=["Generations"])
     def create_generation(
         payload: GenerationCreateRequest,
         request: Request,
@@ -1396,7 +1411,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_generation_data(generation), request, status_code=201)
 
-    @application.get("/api/v1/generations/{id}")
+    @application.get("/api/v1/generations/{id}", tags=["Generations"])
     def get_generation(
         generation_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1411,7 +1426,7 @@ def create_app() -> FastAPI:
             raise _not_found("Generation")
         return success_response(_generation_data(generation), request)
 
-    @application.put("/api/v1/generations/{id}")
+    @application.put("/api/v1/generations/{id}", tags=["Generations"])
     def update_generation(
         generation_id: Annotated[UUID, Path(alias="id")],
         payload: GenerationUpdateRequest,
@@ -1432,7 +1447,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_generation_data(generation), request)
 
-    @application.delete("/api/v1/generations/{id}")
+    @application.delete("/api/v1/generations/{id}", tags=["Generations"])
     def delete_generation(
         generation_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1448,7 +1463,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.get("/api/v1/assets")
+    @application.get("/api/v1/assets", tags=["Assets"])
     def list_assets(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],
@@ -1471,7 +1486,7 @@ def create_app() -> FastAPI:
         )
         return success_response(_page_data(assets, _asset_data), request)
 
-    @application.post("/api/v1/assets")
+    @application.post("/api/v1/assets", tags=["Assets"])
     def create_asset(
         payload: AssetCreateRequest,
         request: Request,
@@ -1498,7 +1513,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_asset_data(asset), request, status_code=201)
 
-    @application.get("/api/v1/assets/{id}")
+    @application.get("/api/v1/assets/{id}", tags=["Assets"])
     def get_asset(
         asset_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1510,7 +1525,7 @@ def create_app() -> FastAPI:
             raise _not_found("Asset")
         return success_response(_asset_data(asset), request)
 
-    @application.put("/api/v1/assets/{id}")
+    @application.put("/api/v1/assets/{id}", tags=["Assets"])
     def update_asset(
         asset_id: Annotated[UUID, Path(alias="id")],
         payload: AssetUpdateRequest,
@@ -1531,7 +1546,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response(_asset_data(asset), request)
 
-    @application.delete("/api/v1/assets/{id}")
+    @application.delete("/api/v1/assets/{id}", tags=["Assets"])
     def delete_asset(
         asset_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1545,7 +1560,7 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
-    @application.post("/api/v1/content/generate")
+    @application.post("/api/v1/content/generate", tags=["Contents"])
     def generate_text_content(
         payload: GenerateContentRequest,
         request: Request,
@@ -1652,7 +1667,7 @@ def create_app() -> FastAPI:
             request,
         )
 
-    @application.post("/api/v1/content/improve")
+    @application.post("/api/v1/content/improve", tags=["Contents"])
     def improve_text_content(
         payload: ImproveContentRequest,
         request: Request,
@@ -1748,7 +1763,7 @@ def create_app() -> FastAPI:
 
         return success_response(_improved_content_data(preview), request)
 
-    @application.post("/api/v1/images/generate")
+    @application.post("/api/v1/images/generate", tags=["Images"])
     def generate_image(
         payload: GenerateImageRequest,
         request: Request,
@@ -1796,7 +1811,7 @@ def create_app() -> FastAPI:
 
         return success_response(_image_generation_status_data(status), request, status_code=202)
 
-    @application.post("/api/v1/images/{id}/regenerate")
+    @application.post("/api/v1/images/{id}/regenerate", tags=["Images"])
     def regenerate_image(
         image_id: Annotated[UUID, Path(alias="id")],
         payload: RegenerateImageRequest,
@@ -1845,7 +1860,7 @@ def create_app() -> FastAPI:
 
         return success_response(_image_generation_status_data(status), request, status_code=202)
 
-    @application.get("/api/v1/images/{id}")
+    @application.get("/api/v1/images/{id}", tags=["Images"])
     def get_image(
         job_id: Annotated[UUID, Path(alias="id")],
         request: Request,
@@ -1882,8 +1897,8 @@ def create_app() -> FastAPI:
             request,
         )
 
-    @application.get("/api/v1/content")
-    @application.get("/api/v1/contents")
+    @application.get("/api/v1/content", tags=["Contents"])
+    @application.get("/api/v1/contents", tags=["Contents"])
     def list_content(
         request: Request,
         current_user: Annotated[UserRecord, Depends(get_current_user)],

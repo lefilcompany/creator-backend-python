@@ -13,10 +13,34 @@ x-rate-limit:
   response: { $ref: '#/components/responses/RateLimitExceeded' }
 servers:
   - url: http://localhost:8000
+tags:
+  - name: System
+    description: Health, liveness and operational endpoints.
+  - name: Auth
+    description: Authentication and signup endpoints.
+  - name: Users
+    description: User profile and administration endpoints.
+  - name: Settings
+    description: Authenticated Principal settings endpoints.
+  - name: Workspaces
+    description: Workspace lifecycle endpoints.
+  - name: Brands
+    description: Brand and Brand Settings endpoints.
+  - name: Projects
+    description: Project endpoints.
+  - name: Contents
+    description: Content CRUD and content workflow endpoints.
+  - name: Generations
+    description: Generation lifecycle endpoints.
+  - name: Assets
+    description: Asset metadata endpoints.
+  - name: Images
+    description: Image generation and retrieval endpoints.
 paths:
   /health:
     get:
       operationId: getHealth
+      tags: [System]
       responses:
         '200':
           description: Application health status.
@@ -26,12 +50,14 @@ paths:
   /health/live:
     get:
       operationId: liveHealth
+      tags: [System]
       responses:
         '200':
           description: Process is alive.
   /metrics:
     get:
       operationId: getMetrics
+      tags: [System]
       responses:
         '200':
           description: Prometheus metrics with bounded labels.
@@ -41,6 +67,7 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: loginWithPassword
+      tags: [Auth]
       requestBody:
         required: true
         content:
@@ -60,6 +87,7 @@ paths:
   /api/v1/auth/signup:
     post:
       operationId: signupWithPassword
+      tags: [Auth]
       requestBody:
         required: true
         content:
@@ -79,6 +107,7 @@ paths:
   /api/v1/users/me:
     get:
       operationId: getMyProfile
+      tags: [Users]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -88,6 +117,7 @@ paths:
   /api/v1/settings:
     get:
       operationId: getMySettings
+      tags: [Settings]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -99,6 +129,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
     patch:
       operationId: updateMySettings
+      tags: [Settings]
       security:
         - SupabaseBearerAuth: []
       requestBody:
@@ -117,6 +148,7 @@ paths:
   /api/v1/users:
     get:
       operationId: listUsers
+      tags: [Users]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -125,6 +157,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       operationId: createUser
+      tags: [Users]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -134,6 +167,7 @@ paths:
   /api/v1/users/{id}:
     get:
       operationId: getUser
+      tags: [Users]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -144,6 +178,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       operationId: updateUser
+      tags: [Users]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -154,6 +189,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
       operationId: deleteUser
+      tags: [Users]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -165,12 +201,14 @@ paths:
   /api/v1/workspaces:
     get:
       operationId: listWorkspaces
+      tags: [Workspaces]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Paginated Workspaces visible by Membership. }
     post:
       operationId: createWorkspace
+      tags: [Workspaces]
       security:
         - SupabaseBearerAuth: []
       requestBody:
@@ -190,6 +228,7 @@ paths:
   /api/v1/workspaces/{id}:
     get:
       operationId: getWorkspace
+      tags: [Workspaces]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -199,6 +238,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       operationId: updateWorkspace
+      tags: [Workspaces]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -208,6 +248,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
       operationId: deleteWorkspace
+      tags: [Workspaces]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -225,12 +266,14 @@ paths:
   /api/v1/brands:
     get:
       operationId: listBrands
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Paginated Brands visible by Workspace Membership. }
     post:
       operationId: createBrand
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -239,6 +282,7 @@ paths:
   /api/v1/brands/{id}:
     get:
       operationId: getBrand
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -248,6 +292,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       operationId: updateBrand
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -257,6 +302,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
       operationId: deleteBrand
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -267,6 +313,7 @@ paths:
   /api/v1/brands/{id}/settings:
     get:
       operationId: getBrandSettings
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -274,18 +321,21 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       operationId: upsertBrandSettings
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Brand Settings upserted. }
     patch:
       operationId: updateBrandSettings
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Brand Settings updated. }
     delete:
       operationId: deleteBrandSettings
+      tags: [Brands]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -293,12 +343,14 @@ paths:
   /api/v1/projects:
     get:
       operationId: listProjects
+      tags: [Projects]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Paginated Projects visible by Workspace Membership. }
     post:
       operationId: createProject
+      tags: [Projects]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -306,18 +358,21 @@ paths:
   /api/v1/projects/{id}:
     get:
       operationId: getProject
+      tags: [Projects]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Project detail. }
     put:
       operationId: updateProject
+      tags: [Projects]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Project updated. }
     delete:
       operationId: deleteProject
+      tags: [Projects]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -325,12 +380,14 @@ paths:
   /api/v1/contents:
     get:
       operationId: listContents
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Paginated Content visible by Workspace Membership. }
     post:
       operationId: createContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -338,18 +395,21 @@ paths:
   /api/v1/contents/{id}:
     get:
       operationId: getContentCanonical
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Content detail. }
     put:
       operationId: updateContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Content updated. }
     delete:
       operationId: deleteContentCanonical
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -357,12 +417,14 @@ paths:
   /api/v1/generations:
     get:
       operationId: listGenerations
+      tags: [Generations]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Paginated Generations visible by Workspace Membership. }
     post:
       operationId: createGeneration
+      tags: [Generations]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -370,18 +432,21 @@ paths:
   /api/v1/generations/{id}:
     get:
       operationId: getGeneration
+      tags: [Generations]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Generation detail. }
     put:
       operationId: updateGeneration
+      tags: [Generations]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Generation updated. }
     delete:
       operationId: deleteGeneration
+      tags: [Generations]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -389,12 +454,14 @@ paths:
   /api/v1/assets:
     get:
       operationId: listAssets
+      tags: [Assets]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Paginated Assets visible by Workspace Membership. }
     post:
       operationId: createAsset
+      tags: [Assets]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -402,18 +469,21 @@ paths:
   /api/v1/assets/{id}:
     get:
       operationId: getAsset
+      tags: [Assets]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Asset detail. }
     put:
       operationId: updateAsset
+      tags: [Assets]
       security:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Asset metadata updated. }
     delete:
       operationId: deleteAsset
+      tags: [Assets]
       security:
         - SupabaseBearerAuth: []
       responses:
@@ -421,6 +491,7 @@ paths:
   /api/v1/content/generate:
     post:
       operationId: generateContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       requestBody:
@@ -445,6 +516,7 @@ paths:
   /api/v1/content/improve:
     post:
       operationId: improveContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       requestBody:
@@ -470,6 +542,7 @@ paths:
   /api/v1/images/generate:
     post:
       operationId: generateImage
+      tags: [Images]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -494,6 +567,7 @@ paths:
   /api/v1/images/{id}:
     get:
       operationId: getImage
+      tags: [Images]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -511,6 +585,7 @@ paths:
   /api/v1/images/{id}/regenerate:
     post:
       operationId: regenerateImage
+      tags: [Images]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -536,6 +611,7 @@ paths:
   /api/v1/content:
     get:
       operationId: listContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -576,6 +652,7 @@ paths:
   /api/v1/content/{id}:
     get:
       operationId: getContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       parameters:
@@ -592,6 +669,7 @@ paths:
         '500': { $ref: '#/components/responses/AuthMisconfigured' }
     delete:
       operationId: deleteContent
+      tags: [Contents]
       security:
         - SupabaseBearerAuth: []
       parameters:

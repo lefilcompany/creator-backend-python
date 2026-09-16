@@ -2314,6 +2314,44 @@ async def test_swagger_and_openapi_are_available() -> None:
     assert "/api/v1/workspaces/{id}" in openapi_schema["paths"]
 
 
+def test_swagger_operations_are_grouped_by_domain() -> None:
+    schema = app.openapi()
+    assert [tag["name"] for tag in schema["tags"]] == [
+        "System",
+        "Auth",
+        "Users",
+        "Settings",
+        "Workspaces",
+        "Brands",
+        "Projects",
+        "Contents",
+        "Generations",
+        "Assets",
+        "Images",
+    ]
+
+    prefixes = {
+        "/health": "System",
+        "/metrics": "System",
+        "/api/v1/auth/": "Auth",
+        "/api/v1/users": "Users",
+        "/api/v1/settings": "Settings",
+        "/api/v1/workspaces": "Workspaces",
+        "/api/v1/brands": "Brands",
+        "/api/v1/projects": "Projects",
+        "/api/v1/content": "Contents",
+        "/api/v1/contents": "Contents",
+        "/api/v1/generations": "Generations",
+        "/api/v1/assets": "Assets",
+        "/api/v1/images": "Images",
+    }
+    for path, path_item in schema["paths"].items():
+        expected_tag = next(tag for prefix, tag in prefixes.items() if path.startswith(prefix))
+        for method, operation in path_item.items():
+            if method in {"get", "post", "put", "patch", "delete"}:
+                assert operation["tags"] == [expected_tag], (method, path)
+
+
 @pytest.mark.anyio
 async def test_swagger_uses_bearer_security_for_protected_routes() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
