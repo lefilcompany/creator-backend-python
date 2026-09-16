@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from threading import Lock
 from time import monotonic
+from typing import cast
 from uuid import uuid4
 
 from redis import Redis
@@ -74,17 +75,18 @@ class RedisRateLimitBackend(RateLimitBackend):
     def consume(self, *, key: str, limit: int, window_seconds: float) -> RateLimitDecision:
         window_ms = max(int(window_seconds * 1000), 1)
         try:
-            result = self._connection.eval(
+            raw_result = self._connection.eval(
                 REDIS_SLIDING_WINDOW_SCRIPT,
                 1,
                 key,
                 self._member_factory(),
-                limit,
-                window_ms,
+                str(limit),
+                str(window_ms),
             )
         except (RedisError, OSError) as error:
             raise RateLimitBackendError("Rate limiter Redis backend is unavailable") from error
 
+        result = cast(list[int], raw_result)
         try:
             allowed, reset_ms, remaining = (int(value) for value in result)
         except (TypeError, ValueError) as error:
