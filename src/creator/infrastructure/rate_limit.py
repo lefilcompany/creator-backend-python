@@ -15,7 +15,6 @@ from redis.exceptions import RedisError
 from creator.config import Settings
 from creator.infrastructure.metrics import MetricsRegistry
 
-
 REDIS_SLIDING_WINDOW_SCRIPT = """
 local server_time = redis.call('TIME')
 local now_ms = tonumber(server_time[1]) * 1000 + math.floor(tonumber(server_time[2]) / 1000)

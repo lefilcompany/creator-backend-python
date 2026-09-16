@@ -10,6 +10,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 
 from creator.api.dependencies import (
     get_current_user,
+    get_metrics_registry,
     get_optional_principal,
     get_rate_limiter,
 )
