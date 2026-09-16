@@ -184,9 +184,7 @@ def get_metrics_registry(request: Request) -> MetricsRegistry:
 def get_rate_limiter(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)] = None,  # type: ignore[assignment]
-    metrics: Annotated[
-        MetricsRegistry, Depends(get_metrics_registry)
-    ] = None,  # type: ignore[assignment]
+    metrics: Annotated[MetricsRegistry, Depends(get_metrics_registry)] = None,  # type: ignore[assignment]
 ) -> RateLimiter:
     limiter = getattr(request.app.state, "rate_limiter", None)
     if not isinstance(limiter, RateLimiter):

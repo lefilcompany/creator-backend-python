@@ -87,10 +87,7 @@ def test_in_memory_sliding_window_and_reset() -> None:
     clock = FakeClock()
     backend = InMemoryRateLimitBackend(clock=clock)
 
-    decisions = [
-        backend.consume(key="key", limit=5, window_seconds=1.0)
-        for _ in range(6)
-    ]
+    decisions = [backend.consume(key="key", limit=5, window_seconds=1.0) for _ in range(6)]
 
     assert [decision.allowed for decision in decisions] == [True] * 5 + [False]
     assert decisions[5].retry_after_seconds == 1
