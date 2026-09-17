@@ -2,6 +2,7 @@ from types import TracebackType
 from typing import Protocol, Self
 
 from creator.repositories import (
+    AgentWorkflowRepository,
     AssetRepository,
     BrandRepository,
     BrandSettingsRepository,
@@ -26,6 +27,7 @@ class UnitOfWork(Protocol):
     assets: AssetRepository
     brand_settings: BrandSettingsRepository
     image_generations: ImageGenerationRepository
+    agent_workflows: AgentWorkflowRepository
 
     def __enter__(self) -> Self: ...
 

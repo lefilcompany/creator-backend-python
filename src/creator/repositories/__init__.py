@@ -1,3 +1,8 @@
+from creator.repositories.agent_workflows import (
+    AgentWorkflowRepository,
+    AgentWorkflowRunRecord,
+    AgentWorkflowStepRecord,
+)
 from creator.repositories.common import JsonObject, Page, PageRequest, SortDirection
 from creator.repositories.content import (
     ContentDetailRecord,
@@ -40,6 +45,9 @@ from creator.repositories.workspace import (
 __all__ = [
     "AssetRecord",
     "AssetRepository",
+    "AgentWorkflowRepository",
+    "AgentWorkflowRunRecord",
+    "AgentWorkflowStepRecord",
     "BrandRecord",
     "BrandRepository",
     "BrandSettingsRecord",

@@ -199,6 +199,8 @@ GENERATION_RATE_LIMIT_ENDPOINTS = frozenset(
         "POST /api/v1/content/improve",
         "POST /api/v1/images/generate",
         "POST /api/v1/images/{id}/regenerate",
+        "POST /api/v1/generations/image-workflows",
+        "POST /api/v1/generations/image-workflows/{id}/decision",
     }
 )
 AUTH_RATE_LIMIT_ENDPOINTS = frozenset(

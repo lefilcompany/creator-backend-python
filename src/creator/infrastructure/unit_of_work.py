@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from creator.domain.exceptions import PersistenceError
 from creator.infrastructure.db import SessionLocal
 from creator.infrastructure.dtos import (
+    SqlAlchemyAgentWorkflowRepository,
     SqlAlchemyAssetRepository,
     SqlAlchemyBrandRepository,
     SqlAlchemyBrandSettingsRepository,
@@ -22,6 +23,7 @@ from creator.infrastructure.dtos import (
     map_sqlalchemy_error,
 )
 from creator.repositories import (
+    AgentWorkflowRepository,
     AssetRepository,
     BrandRepository,
     BrandSettingsRepository,
@@ -48,6 +50,7 @@ class SqlAlchemyUnitOfWork:
     assets: AssetRepository
     brand_settings: BrandSettingsRepository
     image_generations: ImageGenerationRepository
+    agent_workflows: AgentWorkflowRepository
 
     def __init__(self, session_factory: SessionFactory = SessionLocal) -> None:
         self._session_factory = session_factory
@@ -67,6 +70,7 @@ class SqlAlchemyUnitOfWork:
         self.assets = SqlAlchemyAssetRepository(session)
         self.brand_settings = SqlAlchemyBrandSettingsRepository(session)
         self.image_generations = SqlAlchemyImageGenerationRepository(session)
+        self.agent_workflows = SqlAlchemyAgentWorkflowRepository(session)
         return self
 
     def __exit__(

@@ -4,7 +4,6 @@ import logging
 import random
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any
 
@@ -24,6 +23,7 @@ from creator.integrations.gemini.exceptions import (
     GeminiTimeoutError,
     GeminiTransientError,
 )
+from creator.services.ai.image_provider import ImageGenerationRequest, ImageGenerationResult
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +32,8 @@ AUTH_STATUS_CODES = {401, 403}
 SUPPORTED_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
-@dataclass(frozen=True, slots=True)
-class GeminiImageGenerationRequest:
-    prompt: str
-    model: str | None = None
-    output_mime_type: str = "image/png"
-    metadata: dict[str, object] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True)
-class GeminiImageGenerationResult:
-    image_bytes: bytes
-    mime_type: str
-    width: int
-    height: int
-    model: str
-    prompt: str
-    metadata: dict[str, object]
+GeminiImageGenerationRequest = ImageGenerationRequest
+GeminiImageGenerationResult = ImageGenerationResult
 
 
 class GeminiImageGenerator:

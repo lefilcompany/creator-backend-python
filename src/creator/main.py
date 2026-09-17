@@ -33,6 +33,8 @@ from creator.api.schemas import (
     GenerateImageRequest,
     GenerationCreateRequest,
     GenerationUpdateRequest,
+    ImageWorkflowDecisionRequest,
+    ImageWorkflowRequest,
     ImproveContentRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
@@ -42,6 +44,15 @@ from creator.api.schemas import (
     UserUpdateRequest,
     WorkspaceCreateRequest,
     WorkspaceUpdateRequest,
+)
+from creator.application.agent_image_workflow import (
+    AgentWorkflowDecisionError,
+    AgentWorkflowIdempotencyConflictError,
+    AgentWorkflowInputError,
+    AgentWorkflowQueueError,
+    StartImageWorkflowCommand,
+    decide_image_workflow,
+    start_image_workflow,
 )
 from creator.application.content_generation import (
     ContentGenerationPersistenceError,
@@ -64,6 +75,7 @@ from creator.application.image_generation import (
 )
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings, get_settings
+from creator.domain.agent_workflow import WorkflowDecision
 from creator.domain.auth import AuthSession, AuthSignupResult, Principal
 from creator.domain.exceptions import EntityNotFoundError, PersistenceError
 from creator.domain.generation import GenerationJobStatus
@@ -501,6 +513,51 @@ def _image_generation_status_data(
         "updated_at": job.updated_at.isoformat(),
         "failure_code": job.failure_code,
         "image": _image_data(status.image, public_url=public_url) if status.image else None,
+    }
+
+
+def _agent_workflow_data(run: Any) -> dict[str, Any]:
+    return {
+        "id": str(run.id),
+        "workspace_id": str(run.workspace_id),
+        "content_id": str(run.content_id),
+        "brand_id": str(run.brand_id),
+        "status": run.status.value,
+        "human_review": run.human_review.value,
+        "max_refinements": run.max_refinements,
+        "refinement_count": run.refinement_count,
+        "current_step": run.current_step,
+        "input": run.input,
+        "final_image_ids": run.final_image_ids,
+        "failure_code": run.failure_code,
+        "failure_message": run.failure_message,
+        "created_at": run.created_at.isoformat(),
+        "updated_at": run.updated_at.isoformat(),
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+    }
+
+
+def _agent_workflow_step_data(step: Any) -> dict[str, Any]:
+    return {
+        "id": str(step.id),
+        "run_id": str(step.run_id),
+        "sequence_number": step.sequence_number,
+        "role": step.role.value,
+        "status": step.status.value,
+        "attempt": step.attempt,
+        "input": step.input,
+        "output": step.output,
+        "prompt": step.prompt,
+        "prompt_template_id": step.prompt_template_id,
+        "prompt_template_version": step.prompt_template_version,
+        "input_hash": step.input_hash,
+        "provider": step.provider,
+        "model": step.model,
+        "decision": step.decision,
+        "error_code": step.error_code,
+        "error_message": step.error_message,
+        "started_at": step.started_at.isoformat() if step.started_at else None,
+        "completed_at": step.completed_at.isoformat() if step.completed_at else None,
     }
 
 
@@ -1410,6 +1467,114 @@ def create_app() -> FastAPI:
         )
         unit_of_work.commit()
         return success_response(_generation_data(generation), request, status_code=201)
+
+    @application.post("/api/v1/generations/image-workflows", tags=["Generations"])
+    def create_image_workflow(
+        payload: ImageWorkflowRequest,
+        request: Request,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=128)
+        ],
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        settings: Annotated[Settings, Depends(get_settings)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        queue: Annotated[GenerationQueue, Depends(get_generation_queue)],
+    ) -> JSONResponse:
+        try:
+            run = start_image_workflow(
+                unit_of_work=unit_of_work,
+                queue=queue,
+                settings=settings,
+                user=current_user,
+                command=StartImageWorkflowCommand(
+                    brand_id=payload.brand_id,
+                    campaign=payload.campaign,
+                    persona=payload.persona,
+                    quantity=payload.quantity,
+                    extra_instructions=payload.extra_instructions,
+                    human_review=payload.human_review,
+                    max_refinements=payload.max_refinements,
+                    extensions=payload.extensions,
+                    idempotency_key=idempotency_key,
+                    request_id=_request_id(request),
+                ),
+            )
+        except EntityNotFoundError as error:
+            raise HTTPException(
+                status_code=404, detail={"code": "BRAND_NOT_FOUND", "message": "Brand not found"}
+            ) from error
+        except AgentWorkflowIdempotencyConflictError as error:
+            raise HTTPException(
+                status_code=409, detail={"code": "IDEMPOTENCY_CONFLICT", "message": str(error)}
+            ) from error
+        except AgentWorkflowInputError as error:
+            raise HTTPException(
+                status_code=422, detail={"code": "WORKFLOW_INPUT_INVALID", "message": str(error)}
+            ) from error
+        except AgentWorkflowQueueError as error:
+            raise HTTPException(
+                status_code=503, detail={"code": "QUEUE_ENQUEUE_FAILED", "message": str(error)}
+            ) from error
+        return success_response(_agent_workflow_data(run), request, status_code=202)
+
+    @application.get("/api/v1/generations/image-workflows/{id}", tags=["Generations"])
+    def get_image_workflow(
+        workflow_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        run = unit_of_work.agent_workflows.get_for_user(user_id=current_user.id, run_id=workflow_id)
+        if run is None:
+            raise _not_found("Agent workflow")
+        return success_response(_agent_workflow_data(run), request)
+
+    @application.get("/api/v1/generations/image-workflows/{id}/steps", tags=["Generations"])
+    def list_image_workflow_steps(
+        workflow_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        steps = unit_of_work.agent_workflows.list_steps_for_user(
+            user_id=current_user.id, run_id=workflow_id
+        )
+        if steps is None:
+            raise _not_found("Agent workflow")
+        return success_response(
+            {"items": [_agent_workflow_step_data(step) for step in steps]}, request
+        )
+
+    @application.post("/api/v1/generations/image-workflows/{id}/decision", tags=["Generations"])
+    def decide_image_workflow_route(
+        workflow_id: Annotated[UUID, Path(alias="id")],
+        payload: ImageWorkflowDecisionRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        queue: Annotated[GenerationQueue, Depends(get_generation_queue)],
+    ) -> JSONResponse:
+        try:
+            run = decide_image_workflow(
+                unit_of_work=unit_of_work,
+                queue=queue,
+                run_id=workflow_id,
+                user=current_user,
+                request_id=_request_id(request),
+                decision=WorkflowDecision(payload.decision),
+                feedback=payload.feedback,
+            )
+        except EntityNotFoundError as error:
+            raise _not_found("Agent workflow") from error
+        except AgentWorkflowDecisionError as error:
+            raise HTTPException(
+                status_code=409, detail={"code": "WORKFLOW_DECISION_INVALID", "message": str(error)}
+            ) from error
+        except AgentWorkflowQueueError as error:
+            raise HTTPException(
+                status_code=503, detail={"code": "QUEUE_ENQUEUE_FAILED", "message": str(error)}
+            ) from error
+        return success_response(_agent_workflow_data(run), request)
 
     @application.get("/api/v1/generations/{id}", tags=["Generations"])
     def get_generation(

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     image_generation_job_max_attempts: int = 3
     image_generation_retry_interval_seconds: list[int] = [60, 120, 240]
     image_generation_stale_processing_seconds: int = 900
+    agent_workflow_max_refinements: int = Field(default=3, ge=0, le=10)
+    agent_workflow_job_timeout_seconds: int = 900
+    agent_reviewer_model: str = "gemini-2.5-flash"
     storage_provider: str = "local"
     storage_bucket: str = "creator-images"
     storage_max_object_bytes: int = 10 * 1024 * 1024
