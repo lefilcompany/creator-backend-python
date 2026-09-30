@@ -18,15 +18,17 @@ from creator.api.dependencies import (
     get_storage_provider,
     get_uow,
 )
-from creator.api.schemas import (
+from creator.api.dtos import (
     AssetCreateRequest,
     AssetUpdateRequest,
     AuthLoginRequest,
     AuthSignupRequest,
+    BrandAssetCreateRequest,
     BrandCreateRequest,
     BrandSettingsUpdateRequest,
     BrandSettingsUpsertRequest,
     BrandUpdateRequest,
+    CampaignCreateRequest,
     ContentCreateRequest,
     ContentUpdateRequest,
     GenerateContentRequest,
@@ -36,6 +38,10 @@ from creator.api.schemas import (
     ImageWorkflowDecisionRequest,
     ImageWorkflowRequest,
     ImproveContentRequest,
+    PersonaCreateRequest,
+    PlanningCreateRequest,
+    PostStructureCreateRequest,
+    PostStructureUpdateRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
     RegenerateImageRequest,
@@ -348,6 +354,117 @@ def _project_data(project: ProjectRecord) -> dict[str, Any]:
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
         "deleted_at": project.deleted_at.isoformat() if project.deleted_at else None,
+    }
+
+
+def _campaign_data(campaign: Any) -> dict[str, Any]:
+    return {
+        "id": str(campaign.id),
+        "workspace_id": str(campaign.workspace_id),
+        "created_by": str(campaign.created_by),
+        "name": campaign.name,
+        "description": campaign.description,
+        "target_audience": campaign.target_audience,
+        "objectives": campaign.objectives,
+        "voice": campaign.voice,
+        "start_at": campaign.start_at.isoformat() if campaign.start_at else None,
+        "end_at": campaign.end_at.isoformat() if campaign.end_at else None,
+        "created_at": campaign.created_at.isoformat(),
+        "updated_at": campaign.updated_at.isoformat(),
+        "deleted_at": campaign.deleted_at.isoformat() if campaign.deleted_at else None,
+    }
+
+
+def _post_structure_data(post_structure: Any) -> dict[str, Any]:
+    return {
+        "id": str(post_structure.id),
+        "workspace_id": str(post_structure.workspace_id),
+        "planning_id": str(post_structure.planning_id),
+        "created_by": str(post_structure.created_by),
+        "title": post_structure.title,
+        "objective": post_structure.objective,
+        "big_idea": post_structure.big_idea,
+        "main_message": post_structure.main_message,
+        "headline": post_structure.headline,
+        "image_cta": post_structure.image_cta,
+        "art_guiding": post_structure.art_guiding,
+        "status": post_structure.status,
+        "format": post_structure.format,
+        "ratio": post_structure.ratio,
+        "resolution": post_structure.resolution,
+        "created_at": post_structure.created_at.isoformat(),
+        "updated_at": post_structure.updated_at.isoformat(),
+        "deleted_at": post_structure.deleted_at.isoformat() if post_structure.deleted_at else None,
+    }
+
+
+def _planning_data(planning: Any) -> dict[str, Any]:
+    return {
+        "id": str(planning.id),
+        "brand_id": str(planning.brand_id),
+        "campaign_id": str(planning.campaign_id),
+        "persona_id": str(planning.persona_id),
+        "created_by": str(planning.created_by),
+        "info": planning.info,
+        "static_amount": planning.static_amount,
+        "carousel_amount": planning.carousel_amount,
+        "stories_amount": planning.stories_amount,
+        "special_dates": planning.special_dates,
+        "start_period": planning.start_period.isoformat() if planning.start_period else None,
+        "end_period": planning.end_period.isoformat() if planning.end_period else None,
+        "created_at": planning.created_at.isoformat(),
+        "updated_at": planning.updated_at.isoformat(),
+        "deleted_at": planning.deleted_at.isoformat() if planning.deleted_at else None,
+    }
+
+
+def _persona_data(persona: Any) -> dict[str, Any]:
+    return {
+        "id": str(persona.id),
+        "brand_id": str(persona.brand_id),
+        "created_by": str(persona.created_by),
+        "name": persona.name,
+        "age": persona.age,
+        "gender": persona.gender,
+        "main_goal": persona.main_goal,
+        "challenge": persona.challenge,
+        "interest": persona.interest,
+        "routine": persona.routine,
+        "journey": persona.journey,
+        "trigger": persona.trigger,
+        "created_at": persona.created_at.isoformat(),
+        "updated_at": persona.updated_at.isoformat(),
+        "deleted_at": persona.deleted_at.isoformat() if persona.deleted_at else None,
+    }
+
+
+def _brand_asset_data(asset: Any) -> dict[str, Any]:
+    return {
+        "id": str(asset.id),
+        "brand_id": str(asset.brand_id),
+        "type": asset.type,
+        "file_url": asset.file_url,
+        "file_name": asset.file_name,
+        "description": asset.description,
+        "created_at": asset.created_at.isoformat(),
+        "updated_at": asset.updated_at.isoformat(),
+        "deleted_at": asset.deleted_at.isoformat() if asset.deleted_at else None,
+    }
+
+
+def _generated_image_data(image: Any) -> dict[str, Any]:
+    return {
+        "id": str(image.id),
+        "workspace_id": str(image.workspace_id),
+        "design_structure_id": str(image.design_structure_id),
+        "signed_url": image.signed_url,
+        "size": image.size,
+        "resolution": image.resolution,
+        "image_ratio": image.image_ratio,
+        "status": image.status,
+        "created_at": image.created_at.isoformat(),
+        "updated_at": image.updated_at.isoformat(),
+        "deleted_at": image.deleted_at.isoformat() if image.deleted_at else None,
     }
 
 
@@ -1332,6 +1449,230 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
+    @application.get("/api/v1/campaigns", tags=["Campaigns"])
+    def list_campaigns(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        workspace_id: UUID | None = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+    ) -> JSONResponse:
+        campaigns = unit_of_work.campaigns.list_for_user(
+            user_id=current_user.id,
+            workspace_id=workspace_id,
+            page=_page_request(page, limit, sort),
+        )
+        return success_response(_page_data(campaigns, _campaign_data), request)
+
+    @application.post("/api/v1/campaigns", tags=["Campaigns"])
+    def create_campaign(
+        payload: CampaignCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        campaign = unit_of_work.campaigns.add(
+            workspace_id=payload.workspace_id,
+            created_by=current_user.id,
+            name=payload.name,
+            description=payload.description,
+            target_audience=payload.target_audience,
+            objectives=payload.objectives,
+            voice=payload.voice,
+            start_at=payload.start_at,
+            end_at=payload.end_at,
+        )
+        unit_of_work.commit()
+        return success_response(_campaign_data(campaign), request, status_code=201)
+
+    @application.get("/api/v1/campaigns/{id}", tags=["Campaigns"])
+    def get_campaign(
+        campaign_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        campaign = unit_of_work.campaigns.get_for_user(
+            user_id=current_user.id, campaign_id=campaign_id
+        )
+        if campaign is None:
+            raise _not_found("Campaign")
+        return success_response(_campaign_data(campaign), request)
+
+    @application.get("/api/v1/personas", tags=["Personas"])
+    def list_personas(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        brand_id: UUID | None = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+    ) -> JSONResponse:
+        result = unit_of_work.personas.list_for_user(
+            user_id=current_user.id,
+            brand_id=brand_id,
+            page=_page_request(page, limit, sort),
+        )
+        return success_response(_page_data(result, _persona_data), request)
+
+    @application.post("/api/v1/personas", tags=["Personas"])
+    def create_persona(
+        payload: PersonaCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        brand = unit_of_work.brands.get_for_user(user_id=current_user.id, brand_id=payload.brand_id)
+        if brand is None:
+            raise _not_found("Brand")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=brand.workspace_id
+        )
+        persona = unit_of_work.personas.add(
+            created_by=current_user.id,
+            **payload.model_dump(),
+        )
+        unit_of_work.commit()
+        return success_response(_persona_data(persona), request, status_code=201)
+
+    @application.get("/api/v1/planning", tags=["Planning"])
+    def list_planning(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        campaign_id: UUID | None = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+    ) -> JSONResponse:
+        result = unit_of_work.planning.list_for_user(
+            user_id=current_user.id,
+            campaign_id=campaign_id,
+            page=_page_request(page, limit, sort),
+        )
+        return success_response(_page_data(result, _planning_data), request)
+
+    @application.post("/api/v1/planning", tags=["Planning"])
+    def create_planning(
+        payload: PlanningCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        campaign = unit_of_work.campaigns.get_for_user(
+            user_id=current_user.id, campaign_id=payload.campaign_id
+        )
+        if campaign is None:
+            raise _not_found("Campaign")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=campaign.workspace_id
+        )
+        planning = unit_of_work.planning.add(
+            created_by=current_user.id,
+            **payload.model_dump(),
+        )
+        unit_of_work.commit()
+        return success_response(_planning_data(planning), request, status_code=201)
+
+    @application.get("/api/v1/post-structures", tags=["Post Structures"])
+    def list_post_structures(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        workspace_id: UUID | None = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+    ) -> JSONResponse:
+        result = unit_of_work.post_structures.list_for_user(
+            user_id=current_user.id,
+            workspace_id=workspace_id,
+            page=_page_request(page, limit, sort),
+        )
+        return success_response(_page_data(result, _post_structure_data), request)
+
+    @application.post("/api/v1/post-structures", tags=["Post Structures"])
+    def create_post_structure(
+        payload: PostStructureCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        fields = payload.model_dump(exclude={"workspace_id", "planning_id"})
+        post_structure = unit_of_work.post_structures.add(
+            workspace_id=payload.workspace_id,
+            planning_id=payload.planning_id,
+            created_by=current_user.id,
+            **fields,
+        )
+        unit_of_work.commit()
+        return success_response(_post_structure_data(post_structure), request, status_code=201)
+
+    @application.get("/api/v1/post-structures/{id}", tags=["Post Structures"])
+    def get_post_structure(
+        post_structure_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        post_structure = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=post_structure_id
+        )
+        if post_structure is None:
+            raise _not_found("Post structure")
+        return success_response(_post_structure_data(post_structure), request)
+
+    @application.put("/api/v1/post-structures/{id}", tags=["Post Structures"])
+    def update_post_structure(
+        post_structure_id: Annotated[UUID, Path(alias="id")],
+        payload: PostStructureUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=post_structure_id
+        )
+        if existing is None:
+            raise _not_found("Post structure")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
+        )
+        updated = unit_of_work.post_structures.update(
+            post_structure_id=post_structure_id,
+            fields=payload.model_dump(exclude_unset=True),
+        )
+        unit_of_work.commit()
+        return success_response(_post_structure_data(updated), request)
+
+    @application.delete("/api/v1/post-structures/{id}", tags=["Post Structures"])
+    def delete_post_structure(
+        post_structure_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=post_structure_id
+        )
+        if existing is None:
+            raise _not_found("Post structure")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
+        )
+        unit_of_work.post_structures.soft_delete(post_structure_id=post_structure_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
     @application.post("/api/v1/contents", tags=["Contents"])
     def create_content(
         payload: ContentCreateRequest,
@@ -1342,6 +1683,33 @@ def create_app() -> FastAPI:
         _require_workspace_write(
             unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
         )
+        if payload.planning_id is not None:
+            post_fields = {
+                key: value
+                for key, value in payload.payload.items()
+                if key
+                in {
+                    "objective",
+                    "big_idea",
+                    "main_message",
+                    "headline",
+                    "image_cta",
+                    "art_guiding",
+                    "status",
+                    "format",
+                    "ratio",
+                    "resolution",
+                }
+            }
+            post_structure = unit_of_work.post_structures.add(
+                workspace_id=payload.workspace_id,
+                planning_id=payload.planning_id,
+                created_by=current_user.id,
+                title=payload.title,
+                **post_fields,
+            )
+            unit_of_work.commit()
+            return success_response(_post_structure_data(post_structure), request, status_code=201)
         content = unit_of_work.contents.add(
             workspace_id=payload.workspace_id,
             created_by_user_id=current_user.id,
@@ -1362,6 +1730,11 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
+        post_structure = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=content_id
+        )
+        if post_structure is not None:
+            return success_response(_post_structure_data(post_structure), request)
         detail = unit_of_work.contents.get_detail_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
@@ -1378,6 +1751,38 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
+        post_structure = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=content_id
+        )
+        if post_structure is not None:
+            _require_workspace_write(
+                unit_of_work, user_id=current_user.id, workspace_id=post_structure.workspace_id
+            )
+            allowed_fields = {
+                "objective",
+                "big_idea",
+                "main_message",
+                "headline",
+                "image_cta",
+                "art_guiding",
+                "status",
+                "format",
+                "ratio",
+                "resolution",
+            }
+            fields = {
+                key: value
+                for key, value in (payload.payload or {}).items()
+                if key in allowed_fields
+            }
+            if payload.title is not None:
+                fields["title"] = payload.title
+            updated = unit_of_work.post_structures.update(
+                post_structure_id=content_id,
+                fields=fields,
+            )
+            unit_of_work.commit()
+            return success_response(_post_structure_data(updated), request)
         existing = unit_of_work.contents.get_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
@@ -1408,6 +1813,16 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
+        post_structure = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=content_id
+        )
+        if post_structure is not None:
+            _require_workspace_write(
+                unit_of_work, user_id=current_user.id, workspace_id=post_structure.workspace_id
+            )
+            unit_of_work.post_structures.soft_delete(post_structure_id=content_id)
+            unit_of_work.commit()
+            return success_response({"deleted": True}, request)
         existing = unit_of_work.contents.get_by_id_for_user(
             user_id=current_user.id,
             content_id=content_id,
@@ -1628,6 +2043,72 @@ def create_app() -> FastAPI:
         unit_of_work.commit()
         return success_response({"deleted": True}, request)
 
+    @application.get("/api/v1/brand-assets", tags=["Brand Assets"])
+    def list_brand_assets(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        brand_id: UUID | None = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+    ) -> JSONResponse:
+        result = unit_of_work.brand_assets.list_for_user(
+            user_id=current_user.id,
+            brand_id=brand_id,
+            page=_page_request(page, limit, sort),
+        )
+        return success_response(_page_data(result, _brand_asset_data), request)
+
+    @application.post("/api/v1/brand-assets", tags=["Brand Assets"])
+    def create_brand_asset(
+        payload: BrandAssetCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        brand = unit_of_work.brands.get_for_user(user_id=current_user.id, brand_id=payload.brand_id)
+        if brand is None:
+            raise _not_found("Brand")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=brand.workspace_id
+        )
+        asset = unit_of_work.brand_assets.add(
+            brand_id=payload.brand_id,
+            type=payload.type,
+            file_url=payload.file_url,
+            file_name=payload.file_name,
+            description=payload.description,
+        )
+        unit_of_work.commit()
+        return success_response(_brand_asset_data(asset), request, status_code=201)
+
+    @application.get("/api/v1/brand-assets/{id}", tags=["Brand Assets"])
+    def get_brand_asset(
+        asset_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        asset = unit_of_work.brand_assets.get_for_user(user_id=current_user.id, asset_id=asset_id)
+        if asset is None:
+            raise _not_found("Brand asset")
+        return success_response(_brand_asset_data(asset), request)
+
+    @application.get("/api/v1/generated-images/{id}", tags=["Images"])
+    def get_generated_image(
+        image_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        image = unit_of_work.generated_images.get_for_user(
+            user_id=current_user.id, image_id=image_id
+        )
+        if image is None:
+            raise _not_found("Generated image")
+        return success_response(_generated_image_data(image), request)
+
     @application.get("/api/v1/assets", tags=["Assets"])
     def list_assets(
         request: Request,
@@ -1685,6 +2166,11 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
+        brand_asset = unit_of_work.brand_assets.get_for_user(
+            user_id=current_user.id, asset_id=asset_id
+        )
+        if brand_asset is not None:
+            return success_response(_brand_asset_data(brand_asset), request)
         asset = unit_of_work.assets.get_for_user(user_id=current_user.id, asset_id=asset_id)
         if asset is None:
             raise _not_found("Asset")
@@ -2033,6 +2519,11 @@ def create_app() -> FastAPI:
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
         storage: Annotated[StorageProvider, Depends(get_storage_provider)],
     ) -> JSONResponse:
+        generated_image = unit_of_work.generated_images.get_for_user(
+            user_id=current_user.id, image_id=job_id
+        )
+        if generated_image is not None:
+            return success_response(_generated_image_data(generated_image), request)
         status = unit_of_work.image_generations.get_status_for_user(
             user_id=current_user.id,
             job_id=job_id,
@@ -2071,12 +2562,20 @@ def create_app() -> FastAPI:
         page: Annotated[int, Query(ge=1)] = 1,
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         sort: Annotated[str, Query(pattern="^-?created_at$")] = "-created_at",
+        planning_id: UUID | None = None,
         q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
         content_type: Annotated[
             str | None,
             Query(alias="type", pattern="^(IMAGE|TEXT)$"),
         ] = None,
     ) -> JSONResponse:
+        if planning_id is not None:
+            structures = unit_of_work.post_structures.list_for_user(
+                user_id=current_user.id,
+                planning_id=planning_id,
+                page=_page_request(page, limit, sort),
+            )
+            return success_response(_page_data(structures, _post_structure_data), request)
         content_page = unit_of_work.contents.list_for_user(
             user_id=current_user.id,
             filters=ContentFilters(content_type=content_type, query=q),

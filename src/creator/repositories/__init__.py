@@ -33,6 +33,20 @@ from creator.repositories.image_generation import (
     ImageMetadata,
     ImageRecord,
 )
+from creator.repositories.schema import (
+    BrandAssetRecord,
+    BrandAssetRepository,
+    CampaignRecord,
+    CampaignRepository,
+    GeneratedImageRecord,
+    GeneratedImageRepository,
+    PersonaRecord,
+    PersonaRepository,
+    PlanningRecord,
+    PlanningRepository,
+    PostStructureRecord,
+    PostStructureRepository,
+)
 from creator.repositories.settings import SettingsRecord, SettingsRepository
 from creator.repositories.user import UserRecord, UserRepository
 from creator.repositories.workspace import (
@@ -49,6 +63,18 @@ __all__ = [
     "AgentWorkflowRunRecord",
     "AgentWorkflowStepRecord",
     "BrandRecord",
+    "BrandAssetRecord",
+    "BrandAssetRepository",
+    "CampaignRecord",
+    "CampaignRepository",
+    "PostStructureRecord",
+    "PostStructureRepository",
+    "PlanningRecord",
+    "PlanningRepository",
+    "PersonaRecord",
+    "PersonaRepository",
+    "GeneratedImageRecord",
+    "GeneratedImageRepository",
     "BrandRepository",
     "BrandSettingsRecord",
     "BrandSettingsRepository",

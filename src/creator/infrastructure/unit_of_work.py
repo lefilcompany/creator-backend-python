@@ -22,14 +22,28 @@ from creator.infrastructure.dtos import (
     SqlAlchemyWorkspaceRepository,
     map_sqlalchemy_error,
 )
+from creator.infrastructure.schema_repositories import (
+    SqlAlchemyBrandAssetRepository,
+    SqlAlchemyCampaignRepository,
+    SqlAlchemyGeneratedImageRepository,
+    SqlAlchemyPersonaRepository,
+    SqlAlchemyPlanningRepository,
+    SqlAlchemyPostStructureRepository,
+)
 from creator.repositories import (
     AgentWorkflowRepository,
     AssetRepository,
+    BrandAssetRepository,
     BrandRepository,
     BrandSettingsRepository,
+    CampaignRepository,
     ContentRepository,
+    GeneratedImageRepository,
     GenerationRepository,
     ImageGenerationRepository,
+    PersonaRepository,
+    PlanningRepository,
+    PostStructureRepository,
     ProjectRepository,
     SettingsRepository,
     UserRepository,
@@ -48,6 +62,12 @@ class SqlAlchemyUnitOfWork:
     contents: ContentRepository
     generations: GenerationRepository
     assets: AssetRepository
+    campaigns: CampaignRepository
+    post_structures: PostStructureRepository
+    planning: PlanningRepository
+    personas: PersonaRepository
+    generated_images: GeneratedImageRepository
+    brand_assets: BrandAssetRepository
     brand_settings: BrandSettingsRepository
     image_generations: ImageGenerationRepository
     agent_workflows: AgentWorkflowRepository
@@ -68,6 +88,12 @@ class SqlAlchemyUnitOfWork:
         self.contents = SqlAlchemyContentRepository(session)
         self.generations = SqlAlchemyGenerationRepository(session)
         self.assets = SqlAlchemyAssetRepository(session)
+        self.brand_assets = SqlAlchemyBrandAssetRepository(session)
+        self.campaigns = SqlAlchemyCampaignRepository(session)
+        self.post_structures = SqlAlchemyPostStructureRepository(session)
+        self.planning = SqlAlchemyPlanningRepository(session)
+        self.personas = SqlAlchemyPersonaRepository(session)
+        self.generated_images = SqlAlchemyGeneratedImageRepository(session)
         self.brand_settings = SqlAlchemyBrandSettingsRepository(session)
         self.image_generations = SqlAlchemyImageGenerationRepository(session)
         self.agent_workflows = SqlAlchemyAgentWorkflowRepository(session)

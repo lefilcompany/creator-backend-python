@@ -4,11 +4,17 @@ from typing import Protocol, Self
 from creator.repositories import (
     AgentWorkflowRepository,
     AssetRepository,
+    BrandAssetRepository,
     BrandRepository,
     BrandSettingsRepository,
+    CampaignRepository,
     ContentRepository,
+    GeneratedImageRepository,
     GenerationRepository,
     ImageGenerationRepository,
+    PersonaRepository,
+    PlanningRepository,
+    PostStructureRepository,
     ProjectRepository,
     SettingsRepository,
     UserRepository,
@@ -28,6 +34,12 @@ class UnitOfWork(Protocol):
     brand_settings: BrandSettingsRepository
     image_generations: ImageGenerationRepository
     agent_workflows: AgentWorkflowRepository
+    campaigns: CampaignRepository
+    post_structures: PostStructureRepository
+    planning: PlanningRepository
+    personas: PersonaRepository
+    generated_images: GeneratedImageRepository
+    brand_assets: BrandAssetRepository
 
     def __enter__(self) -> Self: ...
 

@@ -24,4 +24,3 @@ def downgrade() -> None:
     op.drop_constraint("uq_users_external_id", "users", type_="unique")
     op.alter_column("users", "external_id", new_column_name="auth_subject")
     op.create_unique_constraint("uq_users_auth_subject", "users", ["auth_subject"])
-

@@ -36,6 +36,16 @@ tags:
     description: Asset metadata endpoints.
   - name: Images
     description: Image generation and retrieval endpoints.
+  - name: Campaigns
+    description: Campaigns replacing the legacy Project resource.
+  - name: Personas
+    description: Workspace-scoped audience personas.
+  - name: Planning
+    description: Campaign planning records and Persona snapshots.
+  - name: Post Structures
+    description: Contract-first post content structures.
+  - name: Brand Assets
+    description: Brand-owned assets from the database schema.
 paths:
   /health:
     get:
@@ -340,6 +350,167 @@ paths:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Brand Settings soft-deleted. }
+  /api/v1/campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [Campaigns]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - name: workspace_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Paginated Workspace-scoped Campaigns. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createCampaign
+      tags: [Campaigns]
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CampaignCreateRequest' }
+      responses:
+        '201': { description: Campaign created. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /api/v1/campaigns/{id}:
+    get:
+      operationId: getCampaign
+      tags: [Campaigns]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Campaign detail. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/personas:
+    get:
+      operationId: listPersonas
+      tags: [Personas]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - name: brand_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Paginated brand personas. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createPersona
+      tags: [Personas]
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonaCreateRequest' }
+      responses:
+        '201': { description: Persona created. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/planning:
+    get:
+      operationId: listPlanning
+      tags: [Planning]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - name: campaign_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Paginated campaign planning records. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createPlanning
+      tags: [Planning]
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanningCreateRequest' }
+      responses:
+        '201': { description: Planning created. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/post-structures:
+    get:
+      operationId: listPostStructures
+      tags: [Post Structures]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - name: workspace_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Paginated Workspace-scoped Post Structures. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createPostStructure
+      tags: [Post Structures]
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostStructureCreateRequest' }
+      responses:
+        '201': { description: Post Structure created. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /api/v1/post-structures/{id}:
+    get:
+      operationId: getPostStructure
+      tags: [Post Structures]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Post Structure detail. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updatePostStructure
+      tags: [Post Structures]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostStructureUpdateRequest' }
+      responses:
+        '200': { description: Post Structure updated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deletePostStructure
+      tags: [Post Structures]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Post Structure soft-deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/projects:
     get:
       operationId: listProjects
@@ -390,6 +561,26 @@ paths:
       tags: [Contents]
       security:
         - SupabaseBearerAuth: []
+      parameters:
+        - name: planning_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspace_id]
+              properties:
+                workspace_id: { type: string, format: uuid }
+                planning_id: { type: [string, 'null'], format: uuid }
+                brand_id: { type: [string, 'null'], format: uuid }
+                project_id: { type: [string, 'null'], format: uuid }
+                type: { type: string, enum: [IMAGE, TEXT] }
+                title: { type: [string, 'null'], maxLength: 255 }
+                payload: { type: object, additionalProperties: true }
       responses:
         '201': { description: Content created in a writable Workspace. }
   /api/v1/contents/{id}:
@@ -405,6 +596,17 @@ paths:
       tags: [Contents]
       security:
         - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brand_id: { type: [string, 'null'], format: uuid }
+                project_id: { type: [string, 'null'], format: uuid }
+                title: { type: [string, 'null'], maxLength: 255 }
+                payload: { type: [object, 'null'], additionalProperties: true }
       responses:
         '200': { description: Content updated. }
     delete:
@@ -451,6 +653,57 @@ paths:
         - SupabaseBearerAuth: []
       responses:
         '200': { description: Generation soft-deleted. }
+  /api/v1/brand-assets:
+    get:
+      operationId: listBrandAssets
+      tags: [Brand Assets]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - name: brand_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Paginated brand assets. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createBrandAsset
+      tags: [Brand Assets]
+      security:
+        - SupabaseBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandAssetCreateRequest' }
+      responses:
+        '201': { description: Brand asset created. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/brand-assets/{id}:
+    get:
+      operationId: getBrandAsset
+      tags: [Brand Assets]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Brand asset detail. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/generated-images/{id}:
+    get:
+      operationId: getGeneratedImage
+      tags: [Images]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Generated image detail. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/assets:
     get:
       operationId: listAssets
@@ -935,13 +1188,13 @@ components:
       type: object
       required: [email, password]
       properties:
-        email: { type: string, format: email, maxLength: 320 }
+        email: { type: string, format: email, maxLength: 50 }
         password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
     AuthSignupRequest:
       type: object
       required: [email, password, workspace]
       properties:
-        email: { type: string, format: email, maxLength: 320 }
+        email: { type: string, format: email, maxLength: 50 }
         password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
         workspace: { $ref: '#/components/schemas/WorkspaceCreateRequest' }
     AuthPrincipal:
@@ -1045,10 +1298,10 @@ components:
         email:
           type: [string, 'null']
           format: email
-          maxLength: 320
+          maxLength: 50
         display_name:
           type: [string, 'null']
-          maxLength: 255
+          maxLength: 50
         global_role:
           type: string
           enum: [admin, gestor, membro]
@@ -1109,7 +1362,7 @@ components:
       required: [id, name, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        name: { type: string, maxLength: 255 }
+        name: { type: string, maxLength: 50 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         deleted_at:
@@ -1134,7 +1387,7 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string, minLength: 1, maxLength: 255 }
+        name: { type: string, minLength: 1, maxLength: 50 }
     WorkspaceCreateResult:
       type: object
       required: [workspace, membership]
@@ -1627,3 +1880,82 @@ components:
           required: [request_id]
           properties:
             request_id: { type: string, format: uuid }
+    CampaignCreateRequest:
+      type: object
+      required: [workspace_id, name]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 30 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        target_audience: { type: [string, 'null'], maxLength: 300 }
+        objectives: { type: [string, 'null'], maxLength: 400 }
+        voice: { type: [string, 'null'], maxLength: 20 }
+        start_at: { type: [string, 'null'], format: date-time }
+        end_at: { type: [string, 'null'], format: date-time }
+    PostStructureCreateRequest:
+      type: object
+      required: [workspace_id, planning_id]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        planning_id: { type: string, format: uuid }
+        title: { type: [string, 'null'], maxLength: 100 }
+        objective: { type: [string, 'null'], maxLength: 300 }
+        big_idea: { type: [string, 'null'], maxLength: 150 }
+        main_message: { type: [string, 'null'], maxLength: 150 }
+        headline: { type: [string, 'null'], maxLength: 50 }
+        image_cta: { type: [string, 'null'], maxLength: 30 }
+        art_guiding: { type: [string, 'null'], maxLength: 1000 }
+        format: { type: [string, 'null'] }
+        ratio: { type: [string, 'null'] }
+        resolution: { type: [string, 'null'] }
+    PostStructureUpdateRequest:
+      type: object
+      properties:
+        title: { type: [string, 'null'], maxLength: 100 }
+        objective: { type: [string, 'null'], maxLength: 300 }
+        big_idea: { type: [string, 'null'], maxLength: 150 }
+        main_message: { type: [string, 'null'], maxLength: 150 }
+        headline: { type: [string, 'null'], maxLength: 50 }
+        image_cta: { type: [string, 'null'], maxLength: 30 }
+        art_guiding: { type: [string, 'null'], maxLength: 1000 }
+        status: { type: [string, 'null'], maxLength: 20 }
+        format: { type: [string, 'null'] }
+        ratio: { type: [string, 'null'] }
+        resolution: { type: [string, 'null'] }
+    BrandAssetCreateRequest:
+      type: object
+      required: [brand_id, type, file_url]
+      properties:
+        brand_id: { type: string, format: uuid }
+        type: { type: string, minLength: 1, maxLength: 30 }
+        file_url: { type: string, minLength: 1, maxLength: 2048 }
+        file_name: { type: [string, 'null'], maxLength: 255 }
+        description: { type: [string, 'null'], maxLength: 500 }
+    PlanningCreateRequest:
+      type: object
+      required: [brand_id, campaign_id, persona_id]
+      properties:
+        brand_id: { type: string, format: uuid }
+        campaign_id: { type: string, format: uuid }
+        persona_id: { type: string, format: uuid }
+        info: { type: [string, 'null'], maxLength: 400 }
+        static_amount: { type: [integer, 'null'], minimum: 0 }
+        carousel_amount: { type: [integer, 'null'], minimum: 0 }
+        stories_amount: { type: [integer, 'null'], minimum: 0 }
+        special_dates: { type: [string, 'null'], maxLength: 50 }
+        start_period: { type: [string, 'null'], format: date-time }
+        end_period: { type: [string, 'null'], format: date-time }
+    PersonaCreateRequest:
+      type: object
+      required: [brand_id, name]
+      properties:
+        brand_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 30 }
+        age: { type: [integer, 'null'], minimum: 0, maximum: 150 }
+        gender: { type: [string, 'null'], maxLength: 10 }
+        main_goal: { type: [string, 'null'], maxLength: 60 }
+        challenge: { type: [string, 'null'], maxLength: 50 }
+        interest: { type: [string, 'null'], maxLength: 200 }
+        routine: { type: [string, 'null'], maxLength: 300 }
+        journey: { type: [string, 'null'], maxLength: 250 }
+        trigger: { type: [string, 'null'], maxLength: 200 }

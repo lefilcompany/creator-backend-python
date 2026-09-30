@@ -142,7 +142,9 @@ def upgrade() -> None:
         sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(length=32), server_default=sa.text("'ACTIVE'"), nullable=False),
+        sa.Column(
+            "status", sa.String(length=32), server_default=sa.text("'ACTIVE'"), nullable=False
+        ),
         sa.Column(
             "metadata",
             postgresql.JSONB(astext_type=sa.Text()),
@@ -201,7 +203,9 @@ def upgrade() -> None:
         ondelete="RESTRICT",
     )
 
-    op.add_column("generations", sa.Column("brand_id", postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column(
+        "generations", sa.Column("brand_id", postgresql.UUID(as_uuid=True), nullable=True)
+    )
     op.add_column(
         "generations", sa.Column("project_id", postgresql.UUID(as_uuid=True), nullable=True)
     )
@@ -244,7 +248,9 @@ def upgrade() -> None:
         ),
         *timestamps(),
         sa.CheckConstraint("byte_size >= 0", name="ck_assets_byte_size_non_negative"),
-        sa.CheckConstraint("char_length(asset_type) BETWEEN 1 AND 100", name="ck_assets_type_length"),
+        sa.CheckConstraint(
+            "char_length(asset_type) BETWEEN 1 AND 100", name="ck_assets_type_length"
+        ),
         sa.CheckConstraint(
             "deleted_at IS NULL OR deleted_at >= created_at",
             name="ck_assets_deleted_after_created",
