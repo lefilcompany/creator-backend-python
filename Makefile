@@ -1,4 +1,4 @@
-.PHONY: install format lint typecheck test check run worker
+.PHONY: install format lint typecheck test dependency-audit check run worker
 
 install:
 	python -m pip install -e '.[dev]'
@@ -14,6 +14,9 @@ typecheck:
 
 test:
 	pytest
+
+dependency-audit:
+	pip-audit --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 
 check: lint typecheck test
 
