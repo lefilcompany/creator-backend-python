@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request
@@ -1706,7 +1706,7 @@ def create_app() -> FastAPI:
                 planning_id=payload.planning_id,
                 created_by=current_user.id,
                 title=payload.title,
-                **post_fields,
+                **cast(dict[str, str | None], post_fields),
             )
             unit_of_work.commit()
             return success_response(_post_structure_data(post_structure), request, status_code=201)
@@ -1730,10 +1730,14 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        post_structure = unit_of_work.post_structures.get_for_user(
-            user_id=current_user.id, post_structure_id=content_id
+        post_structures = getattr(unit_of_work, "post_structures", None)
+        post_structure = (
+            post_structures.get_for_user(user_id=current_user.id, post_structure_id=content_id)
+            if post_structures is not None
+            else None
         )
         if post_structure is not None:
+            assert post_structures is not None
             return success_response(_post_structure_data(post_structure), request)
         detail = unit_of_work.contents.get_detail_by_id_for_user(
             user_id=current_user.id,
@@ -1751,10 +1755,14 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        post_structure = unit_of_work.post_structures.get_for_user(
-            user_id=current_user.id, post_structure_id=content_id
+        post_structures = getattr(unit_of_work, "post_structures", None)
+        post_structure = (
+            post_structures.get_for_user(user_id=current_user.id, post_structure_id=content_id)
+            if post_structures is not None
+            else None
         )
         if post_structure is not None:
+            assert post_structures is not None
             _require_workspace_write(
                 unit_of_work, user_id=current_user.id, workspace_id=post_structure.workspace_id
             )
@@ -1777,9 +1785,9 @@ def create_app() -> FastAPI:
             }
             if payload.title is not None:
                 fields["title"] = payload.title
-            updated = unit_of_work.post_structures.update(
+            updated = post_structures.update(
                 post_structure_id=content_id,
-                fields=fields,
+                fields=cast(dict[str, str | None], fields),
             )
             unit_of_work.commit()
             return success_response(_post_structure_data(updated), request)
@@ -1813,14 +1821,18 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        post_structure = unit_of_work.post_structures.get_for_user(
-            user_id=current_user.id, post_structure_id=content_id
+        post_structures = getattr(unit_of_work, "post_structures", None)
+        post_structure = (
+            post_structures.get_for_user(user_id=current_user.id, post_structure_id=content_id)
+            if post_structures is not None
+            else None
         )
         if post_structure is not None:
+            assert post_structures is not None
             _require_workspace_write(
                 unit_of_work, user_id=current_user.id, workspace_id=post_structure.workspace_id
             )
-            unit_of_work.post_structures.soft_delete(post_structure_id=content_id)
+            post_structures.soft_delete(post_structure_id=content_id)
             unit_of_work.commit()
             return success_response({"deleted": True}, request)
         existing = unit_of_work.contents.get_by_id_for_user(
@@ -2166,8 +2178,11 @@ def create_app() -> FastAPI:
         current_user: Annotated[UserRecord, Depends(get_current_user)],
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
     ) -> JSONResponse:
-        brand_asset = unit_of_work.brand_assets.get_for_user(
-            user_id=current_user.id, asset_id=asset_id
+        brand_assets = getattr(unit_of_work, "brand_assets", None)
+        brand_asset = (
+            brand_assets.get_for_user(user_id=current_user.id, asset_id=asset_id)
+            if brand_assets is not None
+            else None
         )
         if brand_asset is not None:
             return success_response(_brand_asset_data(brand_asset), request)

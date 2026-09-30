@@ -132,7 +132,7 @@ class Plan(SchemaRow, Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
@@ -151,7 +151,7 @@ class PlanItem(SchemaRow, Base):
     cycles: Mapped[int | None] = mapped_column(Integer)
     pricing_scheme_type: Mapped[str | None] = mapped_column(String(20))
     price_cents: Mapped[int] = mapped_column(nullable=False)
-    price_brackets: Mapped[dict | None] = mapped_column(JSONB)
+    price_brackets: Mapped[dict[str, object] | None] = mapped_column(JSONB)
     status: Mapped[str | None] = mapped_column(String(20))
 
 
@@ -171,7 +171,7 @@ class BillingAccount(SchemaRow, Base):
     provider_customer_id: Mapped[str | None] = mapped_column(String(64))
     provider_customer_code: Mapped[str | None] = mapped_column(String(52))
     delinquent: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
@@ -202,7 +202,7 @@ class Subscription(SchemaRow, Base):
     next_billing_at: Mapped[datetime | None] = mapped_column(timestamp)
     start_at: Mapped[datetime | None] = mapped_column(timestamp)
     canceled_at: Mapped[datetime | None] = mapped_column(timestamp)
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
@@ -229,7 +229,7 @@ class Invoice(SchemaRow, Base):
     period_start: Mapped[datetime | None] = mapped_column(timestamp)
     period_end: Mapped[datetime | None] = mapped_column(timestamp)
     canceled_at: Mapped[datetime | None] = mapped_column(timestamp)
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
@@ -245,7 +245,7 @@ class Charge(SchemaRow, Base):
     amount_cents: Mapped[int] = mapped_column(nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
@@ -344,7 +344,9 @@ class Notification(SchemaRow, Base):
     type: Mapped[str] = mapped_column(String(30), nullable=False)
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     body: Mapped[str] = mapped_column(String(2000), nullable=False)
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    payload: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     resource_type: Mapped[str | None] = mapped_column(String(40))
     resource_id: Mapped[UUID | None] = mapped_column(uuid_pk)
     dedupe_key: Mapped[str | None] = mapped_column(String(128))
@@ -479,7 +481,7 @@ class Order(SchemaRow, Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     closed: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
@@ -558,7 +560,7 @@ class ProviderCustomer(SchemaRow, Base):
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     provider_customer_id: Mapped[str] = mapped_column(String(64), nullable=False)
     provider_code: Mapped[str | None] = mapped_column(String(52))
-    metadata_json: Mapped[dict] = mapped_column(
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
@@ -569,7 +571,9 @@ class ProviderSubscription(SchemaRow, Base):
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     provider_subscription_id: Mapped[str] = mapped_column(String(64), nullable=False)
     provider_status: Mapped[str | None] = mapped_column(String(20))
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    payload: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
 
 
 class ProviderWebhookEvent(SchemaRow, Base):
@@ -581,7 +585,7 @@ class ProviderWebhookEvent(SchemaRow, Base):
     account_id: Mapped[str | None] = mapped_column(String(64))
     resource_type: Mapped[str | None] = mapped_column(String(40))
     resource_id: Mapped[str | None] = mapped_column(String(64))
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     signature_verified: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
@@ -628,4 +632,6 @@ class ProviderDispute(SchemaRow, Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     opened_at: Mapped[datetime | None] = mapped_column(timestamp)
     deadline_at: Mapped[datetime | None] = mapped_column(timestamp)
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    payload: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )

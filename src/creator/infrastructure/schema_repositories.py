@@ -134,15 +134,15 @@ class SqlAlchemyGeneratedImageRepository:
         row = self._session.scalars(
             select(schema_models.GeneratedImage)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id
                 == schema_models.GeneratedImage.workspace_id,
             )
             .where(
                 schema_models.GeneratedImage.id == image_id,
                 schema_models.GeneratedImage.deleted_at.is_(None),
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
             )
         ).one_or_none()
         return _generated_image_record(row) if row else None
@@ -172,12 +172,12 @@ class SqlAlchemyPersonaRepository:
             .select_from(schema_models.Persona)
             .join(models.Brand, models.Brand.id == schema_models.Persona.brand_id)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.Persona.deleted_at.is_(None),
                 models.Brand.deleted_at.is_(None),
             )
@@ -200,17 +200,17 @@ class SqlAlchemyPersonaRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.Persona]]:
+    def _select(self, user_id: UUID) -> Select[schema_models.Persona]:
         return (
             select(schema_models.Persona)
             .join(models.Brand, models.Brand.id == schema_models.Persona.brand_id)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.Persona.deleted_at.is_(None),
                 models.Brand.deleted_at.is_(None),
             )
@@ -284,13 +284,12 @@ class SqlAlchemyPlanningRepository:
                 schema_models.Campaign.id == schema_models.Planning.campaign_id,
             )
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
-                == schema_models.Campaign.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == schema_models.Campaign.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.Planning.deleted_at.is_(None),
                 schema_models.Campaign.deleted_at.is_(None),
             )
@@ -313,7 +312,7 @@ class SqlAlchemyPlanningRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.Planning]]:
+    def _select(self, user_id: UUID) -> Select[schema_models.Planning]:
         return (
             select(schema_models.Planning)
             .join(
@@ -321,13 +320,12 @@ class SqlAlchemyPlanningRepository:
                 schema_models.Campaign.id == schema_models.Planning.campaign_id,
             )
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
-                == schema_models.Campaign.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == schema_models.Campaign.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.Planning.deleted_at.is_(None),
                 schema_models.Campaign.deleted_at.is_(None),
             )
@@ -354,13 +352,12 @@ class SqlAlchemyCampaignRepository(_CampaignRepositoryBase):
             select(func.count())
             .select_from(schema_models.Campaign)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
-                == schema_models.Campaign.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == schema_models.Campaign.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.Campaign.deleted_at.is_(None),
             )
         )
@@ -382,17 +379,16 @@ class SqlAlchemyCampaignRepository(_CampaignRepositoryBase):
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.Campaign]]:
+    def _select(self, user_id: UUID) -> Select[schema_models.Campaign]:
         return (
             select(schema_models.Campaign)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
-                == schema_models.Campaign.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == schema_models.Campaign.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.Campaign.deleted_at.is_(None),
             )
         )
@@ -506,13 +502,12 @@ class SqlAlchemyPostStructureRepository:
             select(func.count())
             .select_from(schema_models.PostStructure)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
-                == schema_models.PostStructure.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == schema_models.PostStructure.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.PostStructure.deleted_at.is_(None),
             )
         )
@@ -537,17 +532,16 @@ class SqlAlchemyPostStructureRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.PostStructure]]:
+    def _select(self, user_id: UUID) -> Select[schema_models.PostStructure]:
         return (
             select(schema_models.PostStructure)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id
-                == schema_models.PostStructure.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == schema_models.PostStructure.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.PostStructure.deleted_at.is_(None),
             )
         )
@@ -611,12 +605,12 @@ class SqlAlchemyBrandAssetRepository:
             .select_from(schema_models.BrandAsset)
             .join(models.Brand, models.Brand.id == schema_models.BrandAsset.brand_id)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.BrandAsset.deleted_at.is_(None),
                 models.Brand.deleted_at.is_(None),
             )
@@ -639,17 +633,17 @@ class SqlAlchemyBrandAssetRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.BrandAsset]]:
+    def _select(self, user_id: UUID) -> Select[schema_models.BrandAsset]:
         return (
             select(schema_models.BrandAsset)
             .join(models.Brand, models.Brand.id == schema_models.BrandAsset.brand_id)
             .join(
-                schema_models.WorkspaceMembership,
-                schema_models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
+                models.WorkspaceMembership,
+                models.WorkspaceMembership.workspace_id == models.Brand.workspace_id,
             )
             .where(
-                schema_models.WorkspaceMembership.user_id == user_id,
-                schema_models.WorkspaceMembership.deleted_at.is_(None),
+                models.WorkspaceMembership.user_id == user_id,
+                models.WorkspaceMembership.deleted_at.is_(None),
                 schema_models.BrandAsset.deleted_at.is_(None),
                 models.Brand.deleted_at.is_(None),
             )

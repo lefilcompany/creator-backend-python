@@ -700,7 +700,7 @@ class SqlAlchemyWorkspaceRepository:
             raise EntityNotFoundError("Workspace not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Workspace]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.Workspace]:
         return (
             select(models.Workspace)
             .join(
@@ -844,10 +844,10 @@ class SqlAlchemyBrandRepository:
             raise EntityNotFoundError("Brand not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Brand]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.Brand]:
         return _scoped_resource_select(user_id, models.Brand)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[int]:
         return _scoped_resource_count(user_id, models.Brand)
 
 
@@ -972,10 +972,10 @@ class SqlAlchemyProjectRepository:
             raise EntityNotFoundError("Project not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Project]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.Project]:
         return _scoped_resource_select(user_id, models.Project)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[int]:
         return _scoped_resource_count(user_id, models.Project)
 
 
@@ -1000,7 +1000,7 @@ def _scoped_resource_select(user_id: UUID, model: type[Any]) -> Select[Any]:
     )
 
 
-def _scoped_resource_count(user_id: UUID, model: type[Any]) -> Select[tuple[int]]:
+def _scoped_resource_count(user_id: UUID, model: type[Any]) -> Select[int]:
     return (
         select(func.count())
         .select_from(model)
@@ -1033,7 +1033,7 @@ def _page(
     rows = session.scalars(
         statement.order_by(order_column).offset(page.offset).limit(page.limit)
     ).all()
-    total = session.execute(count_statement).scalar_one()
+    total: int = session.execute(count_statement).scalar_one()
     return list(rows), total
 
 
@@ -1192,7 +1192,7 @@ class SqlAlchemyContentRepository:
         rows = self._session.scalars(
             statement.order_by(order_column, id_order).offset(page.offset).limit(page.limit)
         ).all()
-        total = self._session.execute(count_statement).scalar_one()
+        total: int = self._session.execute(count_statement).scalar_one()
         return Page(
             items=[_content_record(row) for row in rows],
             total=total,
@@ -1235,7 +1235,7 @@ class SqlAlchemyContentRepository:
         row.updated_at = timestamp
         flush_or_raise(self._session)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Content]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.Content]:
         return (
             select(models.Content)
             .join(
@@ -1249,7 +1249,7 @@ class SqlAlchemyContentRepository:
             .where(models.WorkspaceMembership.deleted_at.is_(None))
         )
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[int]:
         return (
             select(func.count())
             .select_from(models.Content)
@@ -1413,10 +1413,10 @@ class SqlAlchemyGenerationRepository:
             raise EntityNotFoundError("Generation not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Generation]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.Generation]:
         return _scoped_resource_select(user_id, models.Generation)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[int]:
         return _scoped_resource_count(user_id, models.Generation)
 
 
@@ -1553,10 +1553,10 @@ class SqlAlchemyAssetRepository:
             raise EntityNotFoundError("Asset not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Asset]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.Asset]:
         return _scoped_resource_select(user_id, models.Asset)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[int]:
         return _scoped_resource_count(user_id, models.Asset)
 
 
@@ -1668,7 +1668,7 @@ class SqlAlchemyBrandSettingsRepository:
             raise EntityNotFoundError("Brand settings not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.BrandSettings]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.BrandSettings]:
         return _scoped_resource_select(user_id, models.BrandSettings)
 
 
@@ -1892,7 +1892,7 @@ class SqlAlchemyAgentWorkflowRepository:
         flush_or_raise(self._session)
         return _agent_workflow_run_record(row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.AgentWorkflowRun]]:
+    def _scoped_select(self, user_id: UUID) -> Select[models.AgentWorkflowRun]:
         return _scoped_resource_select(user_id, models.AgentWorkflowRun)
 
 
@@ -1958,7 +1958,7 @@ class SqlAlchemyImageGenerationRepository:
         row = self._session.execute(statement).one_or_none()
         if row is None:
             return None
-        job, content_id = row
+        job, content_id = cast(tuple[models.GenerationJob, UUID], row)
         return _job_record(job, content_id)
 
     def list_history_for_user(
@@ -1980,9 +1980,9 @@ class SqlAlchemyImageGenerationRepository:
         rows = self._session.execute(
             statement.order_by(order_column).offset(page.offset).limit(page.limit)
         ).all()
-        total = self._session.execute(count_statement).scalar_one()
+        total: int = self._session.execute(count_statement).scalar_one()
         return Page(
-            items=[_job_record(job, content_id) for job, content_id in rows],
+            items=[_job_record(*cast(tuple[models.GenerationJob, UUID], row)) for row in rows],
             total=total,
             page=page.page,
             limit=page.limit,
@@ -2049,7 +2049,9 @@ class SqlAlchemyImageGenerationRepository:
         row = self._session.execute(statement).one_or_none()
         if row is None:
             return None
-        job, content_id, parameters, image = row
+        job, content_id, parameters, image = cast(
+            tuple[models.GenerationJob, UUID, dict[str, object] | None, models.Image | None], row
+        )
         return _image_generation_status_record(job, content_id, parameters, image)
 
     def get_status_by_external_id_for_user(
@@ -2067,7 +2069,9 @@ class SqlAlchemyImageGenerationRepository:
         row = self._session.execute(statement).one_or_none()
         if row is None:
             return None
-        job, content_id, parameters, image = row
+        job, content_id, parameters, image = cast(
+            tuple[models.GenerationJob, UUID, dict[str, object] | None, models.Image | None], row
+        )
         return _image_generation_status_record(job, content_id, parameters, image)
 
     def claim_pending_by_id(self, job_id: UUID) -> ImageGenerationWorkItem | None:
@@ -2232,27 +2236,31 @@ class SqlAlchemyImageGenerationRepository:
         content_id = self._content_id_for_generation(job.generation_id)
         return _job_record(job, content_id)
 
-    def _scoped_job_select(self, user_id: UUID) -> Select[tuple[models.GenerationJob, UUID]]:
-        return (
-            select(models.GenerationJob, models.Generation.content_id)
-            .join(
-                models.Generation,
-                and_(
-                    models.Generation.id == models.GenerationJob.generation_id,
-                    models.Generation.workspace_id == models.GenerationJob.workspace_id,
-                ),
-            )
-            .join(
-                models.WorkspaceMembership,
-                and_(
-                    models.WorkspaceMembership.workspace_id == models.GenerationJob.workspace_id,
-                    models.WorkspaceMembership.user_id == user_id,
-                    models.WorkspaceMembership.deleted_at.is_(None),
-                ),
-            )
+    def _scoped_job_select(self, user_id: UUID) -> Select[Any]:
+        return cast(
+            Select[Any],
+            (
+                select(models.GenerationJob, models.Generation.content_id)
+                .join(
+                    models.Generation,
+                    and_(
+                        models.Generation.id == models.GenerationJob.generation_id,
+                        models.Generation.workspace_id == models.GenerationJob.workspace_id,
+                    ),
+                )
+                .join(
+                    models.WorkspaceMembership,
+                    and_(
+                        models.WorkspaceMembership.workspace_id
+                        == models.GenerationJob.workspace_id,
+                        models.WorkspaceMembership.user_id == user_id,
+                        models.WorkspaceMembership.deleted_at.is_(None),
+                    ),
+                )
+            ),
         )
 
-    def _scoped_job_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_job_count(self, user_id: UUID) -> Select[int]:
         return (
             select(func.count())
             .select_from(models.GenerationJob)
@@ -2274,38 +2282,42 @@ class SqlAlchemyImageGenerationRepository:
         )
 
     def _scoped_status_select(self, user_id: UUID) -> Select[Any]:
-        return (
-            select(
-                models.GenerationJob,
-                models.Generation.content_id,
-                models.Generation.parameters,
-                models.Image,
-            )
-            .join(
-                models.Generation,
-                and_(
-                    models.Generation.id == models.GenerationJob.generation_id,
-                    models.Generation.workspace_id == models.GenerationJob.workspace_id,
-                    models.Generation.deleted_at.is_(None),
-                ),
-            )
-            .join(
-                models.WorkspaceMembership,
-                and_(
-                    models.WorkspaceMembership.workspace_id == models.GenerationJob.workspace_id,
-                    models.WorkspaceMembership.user_id == user_id,
-                    models.WorkspaceMembership.deleted_at.is_(None),
-                ),
-            )
-            .outerjoin(
-                models.Image,
-                and_(
-                    models.Image.generation_id == models.GenerationJob.generation_id,
-                    models.Image.workspace_id == models.GenerationJob.workspace_id,
-                    models.Image.content_id == models.Generation.content_id,
-                    models.Image.deleted_at.is_(None),
-                ),
-            )
+        return cast(
+            Select[Any],
+            (
+                select(
+                    models.GenerationJob,
+                    models.Generation.content_id,
+                    models.Generation.parameters,
+                    models.Image,
+                )
+                .join(
+                    models.Generation,
+                    and_(
+                        models.Generation.id == models.GenerationJob.generation_id,
+                        models.Generation.workspace_id == models.GenerationJob.workspace_id,
+                        models.Generation.deleted_at.is_(None),
+                    ),
+                )
+                .join(
+                    models.WorkspaceMembership,
+                    and_(
+                        models.WorkspaceMembership.workspace_id
+                        == models.GenerationJob.workspace_id,
+                        models.WorkspaceMembership.user_id == user_id,
+                        models.WorkspaceMembership.deleted_at.is_(None),
+                    ),
+                )
+                .outerjoin(
+                    models.Image,
+                    and_(
+                        models.Image.generation_id == models.GenerationJob.generation_id,
+                        models.Image.workspace_id == models.GenerationJob.workspace_id,
+                        models.Image.content_id == models.Generation.content_id,
+                        models.Image.deleted_at.is_(None),
+                    ),
+                )
+            ),
         )
 
     def _apply_history_filters(
