@@ -138,6 +138,11 @@ OPENAPI_TAGS = [
     {"name": "Generations", "description": "Generation lifecycle endpoints."},
     {"name": "Assets", "description": "Asset metadata endpoints."},
     {"name": "Images", "description": "Image generation and retrieval endpoints."},
+    {"name": "Campaigns", "description": "Campaign lifecycle endpoints."},
+    {"name": "Personas", "description": "Audience persona endpoints."},
+    {"name": "Planning", "description": "Content planning endpoints."},
+    {"name": "Post Structures", "description": "Post structure endpoints."},
+    {"name": "Brand Assets", "description": "Brand asset endpoints."},
 ]
 
 

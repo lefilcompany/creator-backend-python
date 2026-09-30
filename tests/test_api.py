@@ -2328,6 +2328,11 @@ def test_swagger_operations_are_grouped_by_domain() -> None:
         "Generations",
         "Assets",
         "Images",
+        "Campaigns",
+        "Personas",
+        "Planning",
+        "Post Structures",
+        "Brand Assets",
     ]
 
     prefixes = {
@@ -2344,6 +2349,12 @@ def test_swagger_operations_are_grouped_by_domain() -> None:
         "/api/v1/generations": "Generations",
         "/api/v1/assets": "Assets",
         "/api/v1/images": "Images",
+        "/api/v1/campaigns": "Campaigns",
+        "/api/v1/personas": "Personas",
+        "/api/v1/planning": "Planning",
+        "/api/v1/post-structures": "Post Structures",
+        "/api/v1/brand-assets": "Brand Assets",
+        "/api/v1/generated-images": "Images",
     }
     for path, path_item in schema["paths"].items():
         expected_tag = next(tag for prefix, tag in prefixes.items() if path.startswith(prefix))

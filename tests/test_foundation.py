@@ -8,6 +8,7 @@ from creator.api import dependencies
 from creator.api.dependencies import get_current_user, get_principal
 from creator.config import Settings, get_settings
 from creator.domain.auth import Principal
+from creator.infrastructure import queue as queue_module
 from creator.infrastructure.auth import AccessTokenInvalidError
 from creator.infrastructure.db import get_db
 from creator.infrastructure.queue import get_generation_queue
@@ -26,14 +27,14 @@ def test_settings_are_cached() -> None:
 
 def test_required_auth_without_supabase_configuration_fails_closed() -> None:
     with pytest.raises(HTTPException) as error:
-        get_principal("Bearer token", Settings(auth_required=True))
+        get_principal("Bearer token", Settings(_env_file=None, auth_required=True))
 
     assert error.value.status_code == 500
     assert error.value.detail["code"] == "AUTHENTICATION_MISCONFIGURED"
 
 
 def test_optional_auth_without_supabase_configuration_returns_none() -> None:
-    assert get_principal("Bearer token", Settings(auth_required=False)) is None
+    assert get_principal("Bearer token", Settings(_env_file=None, auth_required=False)) is None
 
 
 def test_optional_auth_without_credentials_returns_none() -> None:
@@ -143,7 +144,12 @@ def test_db_dependency_yields_a_session() -> None:
     session.close()
 
 
-def test_queue_factory_uses_generation_queue() -> None:
+def test_queue_factory_uses_generation_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        queue_module,
+        "get_settings",
+        lambda: Settings(_env_file=None),
+    )
     queue = get_generation_queue()
 
     assert queue.name == "creator:rq:generations"
