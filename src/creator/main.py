@@ -2534,8 +2534,11 @@ def create_app() -> FastAPI:
         unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
         storage: Annotated[StorageProvider, Depends(get_storage_provider)],
     ) -> JSONResponse:
-        generated_image = unit_of_work.generated_images.get_for_user(
-            user_id=current_user.id, image_id=job_id
+        generated_images = getattr(unit_of_work, "generated_images", None)
+        generated_image = (
+            generated_images.get_for_user(user_id=current_user.id, image_id=job_id)
+            if generated_images is not None
+            else None
         )
         if generated_image is not None:
             return success_response(_generated_image_data(generated_image), request)
