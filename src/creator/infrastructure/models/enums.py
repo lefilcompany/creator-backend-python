@@ -38,6 +38,8 @@ class ContentType(StrEnum):
 class GenerationType(StrEnum):
     IMAGE = "IMAGE"
     TEXT = "TEXT"
+    COPY = "COPY"
+    CAPTION = "CAPTION"
 
 
 global_role_enum = SQLEnum(

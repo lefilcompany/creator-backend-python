@@ -19,7 +19,9 @@ from creator.infrastructure import schema_models as _schema_models  # noqa: F401
 from creator.infrastructure.db import Base
 
 from ..enums import (
+    GenerationType,
     generation_job_status_enum,
+    generation_type_enum,
 )
 from ..types import timestamp_tz, uuid_pk
 
@@ -57,6 +59,12 @@ class GenerationJob(Base):
     )
     workspace_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     generation_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    artifact_type: Mapped[GenerationType] = mapped_column(
+        generation_type_enum, nullable=False, server_default=text("'IMAGE'")
+    )
+    operation: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'CREATE'")
+    )
     status: Mapped[GenerationJobStatus] = mapped_column(
         generation_job_status_enum,
         nullable=False,
@@ -65,6 +73,12 @@ class GenerationJob(Base):
     external_id: Mapped[str | None] = mapped_column(String(255))
     attempt_count: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     max_attempts: Mapped[int] = mapped_column(nullable=False, server_default=text("1"))
+    timeout_seconds: Mapped[int] = mapped_column(nullable=False, server_default=text("300"))
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    failure_policy: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'FAIL'")
+    )
+    request_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     failure_code: Mapped[str | None] = mapped_column(String(100))
     failure_message: Mapped[str | None] = mapped_column(Text)
     queued_at: Mapped[object] = mapped_column(

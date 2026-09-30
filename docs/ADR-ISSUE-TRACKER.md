@@ -21,6 +21,7 @@ As issues #34 a #43 são issues de acompanhamento - não são tarefas duplicadas
 | [ADR-013](adr/0013-content-improvement-preview.md) | [docs/issues/0023](issues/0023-content-improvement-preview.md) | [docs/issues/0023](issues/0023-content-improvement-preview.md) |
 | [ADR-014](adr/0014-agent-image-generation-workflow.md) | [#56](https://github.com/lefilcompany/creator-backend-python/issues/56), [docs/issues/0032](issues/0032-agent-image-generation-workflow.md) | #57, #58, #59, #60; [docs/issues/0033](issues/0033-agent-workflow-persistence.md), [docs/issues/0034](issues/0034-specialist-agent-contracts.md), [docs/issues/0035](issues/0035-multimodal-image-reviewer.md), [docs/issues/0036](issues/0036-agent-workflow-api-worker.md) |
 | [ADR-015](adr/0015-database-diagram-alignment.md) | [docs/issues/0037](issues/0037-database-diagram-alignment.md) | [docs/issues/0037](issues/0037-database-diagram-alignment.md) |
+| [ADR-016](adr/0016-polymorphic-generation-job-artifacts.md) | [docs/issues/0038](issues/0038-polymorphic-generation-job-artifacts.md) | #56, #58, #66; [docs/issues/0038](issues/0038-polymorphic-generation-job-artifacts.md) |
 
 ## Regras de atualização
 

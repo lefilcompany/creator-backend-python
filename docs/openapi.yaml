@@ -1762,17 +1762,23 @@ components:
         style: { $ref: '#/components/schemas/GenerateImageStyle' }
     GenerationJob:
       type: object
-      required: [id, workspace_id, generation_id, status, attempt_count, max_attempts, queued_at, created_at, updated_at]
+      required: [id, workspace_id, generation_id, artifact_type, operation, status, attempt_count, max_attempts, queued_at, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
         generation_id: { type: string, format: uuid }
+        artifact_type: { type: string, enum: [IMAGE, COPY, CAPTION] }
+        operation: { type: string, enum: [CREATE, REGENERATE, TRANSFORM] }
         status: { $ref: '#/components/schemas/GenerationJobStatus' }
         external_id:
           type: [string, 'null']
           maxLength: 255
         attempt_count: { type: integer, minimum: 0 }
         max_attempts: { type: integer, minimum: 1 }
+        timeout_seconds: { type: integer, minimum: 1 }
+        idempotency_key: { type: [string, 'null'], maxLength: 255 }
+        failure_policy: { type: string, enum: [FAIL, RETRY, PARTIAL] }
+        request_id: { type: [string, 'null'], format: uuid }
         failure_code:
           type: [string, 'null']
           maxLength: 100
@@ -1795,15 +1801,20 @@ components:
           format: date-time
     GenerationJobStatusEvent:
       type: object
-      required: [id, generation_job_id, status, occurred_at]
+      required: [id, generation_job_id, artifact_type, version, correlation_id, status, occurred_at]
       properties:
         id: { type: string, format: uuid }
         generation_job_id: { type: string, format: uuid }
+        artifact_type: { type: string, enum: [IMAGE, COPY, CAPTION] }
+        version: { type: integer, minimum: 1 }
+        correlation_id: { type: string, maxLength: 255 }
         previous_status:
           anyOf:
             - $ref: '#/components/schemas/GenerationJobStatus'
             - type: 'null'
         status: { $ref: '#/components/schemas/GenerationJobStatus' }
+        sanitized_result: { type: [object, 'null'], additionalProperties: true, description: Sanitized metadata only; image bytes are never persisted here. }
+        request_id: { type: [string, 'null'], format: uuid }
         occurred_at: { type: string, format: date-time }
     Image:
       type: object
