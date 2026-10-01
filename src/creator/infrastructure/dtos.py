@@ -247,6 +247,11 @@ def _agent_workflow_step_record(row: models.AgentWorkflowStep) -> AgentWorkflowS
         prompt_template_id=row.prompt_template_id,
         prompt_template_version=row.prompt_template_version,
         input_hash=row.input_hash,
+        output_hash=row.output_hash,
+        schema_name=row.schema_name,
+        schema_version=row.schema_version,
+        predecessor_step_id=row.predecessor_step_id,
+        correlation_id=row.correlation_id,
         provider=row.provider,
         model=row.model,
         decision=row.decision,
@@ -1803,6 +1808,11 @@ class SqlAlchemyAgentWorkflowRepository:
         provider: str | None = None,
         model: str | None = None,
         decision: str | None = None,
+        output_hash: str | None = None,
+        schema_name: str | None = None,
+        schema_version: str | None = None,
+        predecessor_step_id: UUID | None = None,
+        correlation_id: UUID | None = None,
     ) -> AgentWorkflowStepRecord:
         row = self._session.scalars(
             select(models.AgentWorkflowStep).where(
@@ -1818,6 +1828,11 @@ class SqlAlchemyAgentWorkflowRepository:
         row.prompt_template_id = prompt_template_id
         row.prompt_template_version = prompt_template_version
         row.input_hash = input_hash
+        row.output_hash = output_hash
+        row.schema_name = schema_name
+        row.schema_version = schema_version
+        row.predecessor_step_id = predecessor_step_id
+        row.correlation_id = correlation_id
         row.provider = provider
         row.model = model
         row.decision = decision

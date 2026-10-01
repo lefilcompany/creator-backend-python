@@ -31,11 +31,16 @@ from creator.repositories import (
     ContentRecord,
     ImageRecord,
 )
-from creator.services.agents.contracts import AgentExecutionContext, BusinessOutput
+from creator.services.agents.contracts import (
+    AgentExecutionContext,
+    BusinessOutput,
+    WriterOutput,
+)
 from creator.services.agents.runner import StructuredAgentRunner
 from creator.services.ai.image_provider import ImageGenerationResult
 from creator.services.ai.reviewer import UnconfiguredMultimodalImageReviewer
 from creator.services.storage.provider import StorageValidationError
+from creator.workers import agent_workflow as workflow_worker
 
 WORKSPACE_ID = UUID("10000000-0000-0000-0000-000000000001")
 BRAND_ID = UUID("31000000-0000-0000-0000-000000000001")
@@ -413,7 +418,16 @@ class WorkflowRepo:
         return step
 
     def complete_step(self, step_id: UUID, **kwargs: object) -> AgentWorkflowStepRecord:
-        return next(step for step in self.steps if step.id == step_id)
+        for index, step in enumerate(self.steps):
+            if step.id == step_id:
+                updated = replace(
+                    step,
+                    status=AgentWorkflowStepStatus.COMPLETED,
+                    output=kwargs.get("output", step.output),
+                )
+                self.steps[index] = updated
+                return updated
+        raise AssertionError("step not found")
 
     def fail_step(self, step_id: UUID, **kwargs: object) -> None:
         return None
@@ -521,3 +535,120 @@ def test_worker_runs_specialists_and_finishes(monkeypatch: pytest.MonkeyPatch) -
         AgentWorkflowStepRole.ARTIST,
         AgentWorkflowStepRole.REVIEWER,
     ]
+
+
+def test_worker_stage_checkpoints_resume_from_persisted_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import creator.workers.agent_workflow as worker
+
+    run = replace(_run(AgentWorkflowStatus.PENDING), human_review=HumanReviewMode.AUTO)
+    repo = WorkflowRepo(run)
+    WorkerUow.shared_repo = repo
+    monkeypatch.setattr(worker, "SqlAlchemyUnitOfWork", WorkerUow)
+    monkeypatch.setattr(worker, "get_settings", lambda: Settings(gemini_api_key=None))
+    monkeypatch.setattr(worker, "create_llm_provider", lambda settings: WorkflowLLM())
+    monkeypatch.setattr(
+        worker,
+        "create_semantic_retriever",
+        lambda settings: SimpleNamespace(search=lambda *args, **kwargs: []),
+    )
+
+    worker.run_image_agent_workflow(str(run.id), "request", stage="BUSINESS")
+    assert repo.run.current_step == "PLANNER"
+    assert [step.role for step in repo.steps] == [AgentWorkflowStepRole.BUSINESS]
+
+    worker.run_image_agent_workflow(str(run.id), "request", stage="PLANNER")
+    assert repo.run.current_step == "WRITER"
+    assert [step.role for step in repo.steps] == [
+        AgentWorkflowStepRole.BUSINESS,
+        AgentWorkflowStepRole.PLANNER,
+    ]
+
+
+def test_reviewer_stage_consumes_persisted_artist_reference(monkeypatch) -> None:
+    run_id = uuid4()
+    image_id = uuid4()
+    artist_step = SimpleNamespace(
+        id=uuid4(),
+        role=AgentWorkflowStepRole.ARTIST,
+        status=SimpleNamespace(value="COMPLETED"),
+        output={"image_id": str(image_id)},
+    )
+    writer = WriterOutput(
+        caption="caption",
+        direction={
+            "briefing": "brief",
+            "copy": "copy",
+            "visual_prompt": "visual",
+        },
+    )
+    writer_step = SimpleNamespace(
+        id=uuid4(),
+        role=AgentWorkflowStepRole.WRITER,
+        status=SimpleNamespace(value="COMPLETED"),
+        output=writer.model_dump(mode="json", by_alias=True),
+    )
+    image = SimpleNamespace(
+        id=image_id, workspace_id=WORKSPACE_ID, storage_path="image.png", mime_type="image/png"
+    )
+    transitions: list[tuple[object, dict[str, object]]] = []
+
+    class FakeUow:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        class Workflows:
+            def list_steps_internal(self, _run_id):
+                return [writer_step, artist_step]
+
+            def get_internal(self, _run_id):
+                return SimpleNamespace(human_review=SimpleNamespace(value="AUTO"))
+
+            def transition(self, run_id, target, **kwargs):
+                transitions.append((target, kwargs))
+
+        class Images:
+            def get_image_for_user(self, *, user_id, image_id):
+                assert user_id == USER_ID
+                assert image_id == image.id
+                return image
+
+        agent_workflows = Workflows()
+        image_generations = Images()
+
+        def commit(self):
+            return None
+
+    review = SimpleNamespace(decision="APPROVED", score=1, feedback=[], safety_issues=[])
+    persisted: list[object] = []
+    monkeypatch.setattr(workflow_worker, "SqlAlchemyUnitOfWork", FakeUow)
+    monkeypatch.setattr(
+        workflow_worker, "get_settings", lambda: SimpleNamespace(storage_max_object_bytes=100)
+    )
+    monkeypatch.setattr(
+        workflow_worker,
+        "create_storage_provider",
+        lambda _settings: SimpleNamespace(download=lambda path, max_bytes: b"image"),
+    )
+    monkeypatch.setattr(
+        workflow_worker,
+        "create_image_reviewer",
+        lambda _settings: SimpleNamespace(review=lambda request: review),
+    )
+    monkeypatch.setattr(
+        workflow_worker, "_persist_review_step", lambda *args, **kwargs: persisted.append(kwargs)
+    )
+
+    workflow_worker._run_reviewer_stage(
+        SimpleNamespace(id=run_id, workspace_id=WORKSPACE_ID),
+        SimpleNamespace(id=USER_ID),
+        BusinessOutput(brand_summary="brand", voice="voice", visual_direction="visual"),
+        SimpleNamespace(),
+    )
+
+    assert persisted == [{"predecessor_step_id": artist_step.id}]
+    assert transitions[0][0] == AgentWorkflowStatus.COMPLETED

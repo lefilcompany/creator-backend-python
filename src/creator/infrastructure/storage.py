@@ -175,6 +175,36 @@ class SupabaseStorageProvider:
             metadata=metadata,
         )
 
+    def download(self, path: str, *, max_bytes: int) -> bytes:
+        self._require_settings()
+        try:
+            request = Request(
+                self._object_url(path),
+                headers={
+                    "apikey": self._service_role_key,
+                    "Authorization": f"Bearer {self._service_role_key}",
+                },
+                method="GET",
+            )
+            response = self._opener(request, self._settings.supabase_auth_timeout_seconds)
+            status_code = int(getattr(response, "status", 200))
+            content = bytes(response.read())
+            if status_code == 404:
+                raise StorageObjectNotFoundError("Supabase Storage object does not exist")
+            if status_code >= 400:
+                raise StorageUrlError("Supabase Storage object download failed")
+        except HTTPError as error:
+            if error.code == 404:
+                raise StorageObjectNotFoundError(
+                    "Supabase Storage object does not exist"
+                ) from error
+            raise StorageUrlError("Supabase Storage object download failed") from error
+        except (TimeoutError, URLError) as error:
+            raise StorageUrlError("Supabase Storage object download failed") from error
+        if len(content) > max_bytes:
+            raise StorageValidationError("Storage object exceeds processing size limit")
+        return content
+
     def get_url(self, path: str) -> str:
         self._require_settings()
         body = json.dumps({"expiresIn": self._settings.storage_signed_url_expires_seconds}).encode(
@@ -308,6 +338,14 @@ class LocalStorageProvider:
             checksum_sha256=checksum,
             metadata={"provider": "local"},
         )
+
+    def download(self, path: str, *, max_bytes: int) -> bytes:
+        target = self._target_path(path)
+        if not target.exists():
+            raise StorageObjectNotFoundError("Local storage object does not exist")
+        if target.stat().st_size > max_bytes:
+            raise StorageValidationError("Storage object exceeds processing size limit")
+        return target.read_bytes()
 
     def _target_path(self, path: str) -> Path:
         validate_upload_request(

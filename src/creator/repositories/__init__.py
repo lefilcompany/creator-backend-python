@@ -33,6 +33,7 @@ from creator.repositories.image_generation import (
     ImageMetadata,
     ImageRecord,
 )
+from creator.repositories.outbox import OutboxEventRecord, OutboxRepository
 from creator.repositories.schema import (
     BrandAssetRecord,
     BrandAssetRepository,
@@ -62,6 +63,8 @@ __all__ = [
     "AgentWorkflowRepository",
     "AgentWorkflowRunRecord",
     "AgentWorkflowStepRecord",
+    "OutboxEventRecord",
+    "OutboxRepository",
     "BrandRecord",
     "BrandAssetRecord",
     "BrandAssetRepository",

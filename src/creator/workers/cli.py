@@ -15,6 +15,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("image-generation")
     subparsers.add_parser("agent-workflow")
+    subparsers.add_parser("pipeline-outbox")
     args = parser.parse_args()
 
     logging.basicConfig(level=get_settings().log_level)
@@ -22,6 +23,8 @@ def main() -> None:
         run_image_generation_worker()
     elif args.command == "agent-workflow":
         run_agent_workflow_worker()
+    elif args.command == "pipeline-outbox":
+        run_pipeline_outbox_worker()
 
 
 def run_image_generation_worker() -> None:
@@ -37,3 +40,9 @@ def run_agent_workflow_worker() -> None:
     connection = Redis.from_url(settings.redis_url)
     queue = Queue(settings.generation_queue_name, connection=connection)
     Worker([queue], connection=connection).work(with_scheduler=True)
+
+
+def run_pipeline_outbox_worker() -> None:
+    from creator.workers.pipeline_events import publish_pipeline_outbox_once
+
+    publish_pipeline_outbox_once()

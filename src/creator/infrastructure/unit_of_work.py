@@ -22,6 +22,7 @@ from creator.infrastructure.dtos import (
     SqlAlchemyWorkspaceRepository,
     map_sqlalchemy_error,
 )
+from creator.infrastructure.outbox import SqlAlchemyOutboxRepository
 from creator.infrastructure.schema_repositories import (
     SqlAlchemyBrandAssetRepository,
     SqlAlchemyCampaignRepository,
@@ -41,6 +42,7 @@ from creator.repositories import (
     GeneratedImageRepository,
     GenerationRepository,
     ImageGenerationRepository,
+    OutboxRepository,
     PersonaRepository,
     PlanningRepository,
     PostStructureRepository,
@@ -71,6 +73,7 @@ class SqlAlchemyUnitOfWork:
     brand_settings: BrandSettingsRepository
     image_generations: ImageGenerationRepository
     agent_workflows: AgentWorkflowRepository
+    outbox: OutboxRepository
 
     def __init__(self, session_factory: SessionFactory = SessionLocal) -> None:
         self._session_factory = session_factory
@@ -97,6 +100,7 @@ class SqlAlchemyUnitOfWork:
         self.brand_settings = SqlAlchemyBrandSettingsRepository(session)
         self.image_generations = SqlAlchemyImageGenerationRepository(session)
         self.agent_workflows = SqlAlchemyAgentWorkflowRepository(session)
+        self.outbox = SqlAlchemyOutboxRepository(session)
         return self
 
     def __exit__(

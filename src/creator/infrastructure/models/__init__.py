@@ -9,11 +9,12 @@ from .core import Settings, User, Workspace, WorkspaceMembership
 from .enums import ContentType, GenerationType, GlobalRole, WorkspaceRole
 from .generation import Generation, GenerationJob, GenerationJobStatusEvent
 from .project import Project
-from .workflow import AgentWorkflowRun, AgentWorkflowStep
+from .workflow import AgentWorkflowRun, AgentWorkflowStep, OutboxEvent
 
 __all__ = [
     "AgentWorkflowRun",
     "AgentWorkflowStep",
+    "OutboxEvent",
     "Asset",
     "Brand",
     "BrandSettings",

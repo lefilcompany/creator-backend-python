@@ -12,6 +12,7 @@ from creator.repositories import (
     GeneratedImageRepository,
     GenerationRepository,
     ImageGenerationRepository,
+    OutboxRepository,
     PersonaRepository,
     PlanningRepository,
     PostStructureRepository,
@@ -40,6 +41,7 @@ class UnitOfWork(Protocol):
     personas: PersonaRepository
     generated_images: GeneratedImageRepository
     brand_assets: BrandAssetRepository
+    outbox: OutboxRepository
 
     def __enter__(self) -> Self: ...
 

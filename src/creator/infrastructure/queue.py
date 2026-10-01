@@ -4,6 +4,7 @@ from redis import Redis
 from rq import Queue, Retry
 
 from creator.config import Settings, get_settings
+from creator.domain.pipeline_events import PipelineEvent
 
 
 class RqGenerationQueue:
@@ -46,6 +47,15 @@ class RqGenerationQueue:
             job_id=f"creator:rq:agent-workflow:{run_id}",
             job_timeout=self._settings.agent_workflow_job_timeout_seconds,
             meta={"request_id": str(request_id), "agent_workflow_run_id": str(run_id)},
+        )
+
+    def enqueue_pipeline_event(self, *, event_id: UUID, event: PipelineEvent) -> object:
+        return self._queue.enqueue(
+            "creator.workers.pipeline_events.handle_pipeline_event",
+            event.model_dump(mode="json"),
+            job_id=f"creator:rq:pipeline-event:{event_id}",
+            job_timeout=self._settings.agent_workflow_job_timeout_seconds,
+            meta={"event_id": str(event_id), "event_type": event.event_type.value},
         )
 
 

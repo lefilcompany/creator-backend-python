@@ -75,6 +75,9 @@ class StorageProvider(Protocol):
     def stat(self, path: str) -> StoredObjectMetadata:
         """Return metadata for a stored object."""
 
+    def download(self, path: str, *, max_bytes: int) -> bytes:
+        """Read a bounded object for trusted server-side processing."""
+
 
 def image_extension_for_mime_type(mime_type: str) -> str:
     extensions = {

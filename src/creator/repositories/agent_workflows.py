@@ -63,6 +63,11 @@ class AgentWorkflowStepRecord:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
+    output_hash: str | None = None
+    schema_name: str | None = None
+    schema_version: str | None = None
+    predecessor_step_id: UUID | None = None
+    correlation_id: UUID | None = None
 
 
 class AgentWorkflowRepository(Protocol):
@@ -117,6 +122,11 @@ class AgentWorkflowRepository(Protocol):
         provider: str | None = None,
         model: str | None = None,
         decision: str | None = None,
+        output_hash: str | None = None,
+        schema_name: str | None = None,
+        schema_version: str | None = None,
+        predecessor_step_id: UUID | None = None,
+        correlation_id: UUID | None = None,
     ) -> AgentWorkflowStepRecord: ...
 
     def fail_step(self, step_id: UUID, *, error_code: str, error_message: str) -> None: ...

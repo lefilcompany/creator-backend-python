@@ -8,6 +8,7 @@ from uuid import UUID
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings
 from creator.domain.exceptions import ConflictError, EntityNotFoundError
+from creator.domain.pipeline_events import PipelineEvent
 from creator.prompts import (
     RenderedPrompt,
     build_advertising_image_prompt,
@@ -22,6 +23,8 @@ class GenerationQueue(Protocol):
     def enqueue_image_generation(self, *, job_id: UUID, request_id: UUID) -> object: ...
 
     def enqueue_agent_workflow(self, *, run_id: UUID, request_id: UUID) -> object: ...
+
+    def enqueue_pipeline_event(self, *, event_id: UUID, event: PipelineEvent) -> object: ...
 
 
 class IdempotencyConflictError(ConflictError):

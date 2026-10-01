@@ -5,18 +5,21 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from creator.application.unit_of_work import UnitOfWork
 from creator.config import Settings
 from creator.domain.agent_workflow import AgentWorkflowStatus, HumanReviewMode, WorkflowDecision
 from creator.domain.exceptions import EntityNotFoundError
+from creator.domain.pipeline_events import PipelineEvent, PipelineEventType
 from creator.prompts.base import normalize_json_object
 from creator.repositories import AgentWorkflowRunRecord, UserRecord
 
 
 class AgentWorkflowQueue(Protocol):
     def enqueue_agent_workflow(self, *, run_id: UUID, request_id: UUID) -> object: ...
+
+    def enqueue_pipeline_event(self, *, event_id: UUID, event: PipelineEvent) -> object: ...
 
 
 class AgentWorkflowInputError(ValueError):
@@ -106,9 +109,33 @@ def start_image_workflow(
         human_review=HumanReviewMode(command.human_review),
         max_refinements=max_refinements,
     )
+    outbox = getattr(unit_of_work, "outbox", None)
+    started_event: PipelineEvent | None = None
+    outbox_event_id: UUID | None = None
+    if outbox is not None:
+        started_event = PipelineEvent(
+            event_id=uuid4(),
+            event_type=PipelineEventType.WORKFLOW_STARTED,
+            event_version="1.0",
+            workspace_id=run.workspace_id,
+            run_id=run.id,
+            correlation_id=command.request_id,
+            payload_ref={"input": "AgentWorkflowRun.input", "version": "1.0"},
+        )
+        outbox_event_id = outbox.add(
+            workspace_id=run.workspace_id,
+            aggregate_id=run.id,
+            event=started_event,
+        )
     unit_of_work.commit()
     try:
-        queue.enqueue_agent_workflow(run_id=run.id, request_id=command.request_id)
+        if started_event is not None and outbox_event_id is not None:
+            assert outbox is not None
+            queue.enqueue_pipeline_event(event_id=outbox_event_id, event=started_event)
+            outbox.mark_published(outbox_event_id)
+            unit_of_work.commit()
+        else:
+            queue.enqueue_agent_workflow(run_id=run.id, request_id=command.request_id)
     except Exception as error:
         raise AgentWorkflowQueueError("Image agent workflow could not be queued") from error
     return run
@@ -159,6 +186,24 @@ def decide_image_workflow(
         current_step="WRITER",
         refinement_count=run.refinement_count + 1,
     )
+    outbox = getattr(unit_of_work, "outbox", None)
+    if outbox is not None:
+        outbox.add(
+            workspace_id=updated.workspace_id,
+            aggregate_id=updated.id,
+            event=PipelineEvent(
+                event_id=uuid4(),
+                event_type=PipelineEventType.WRITER_REFINEMENT_REQUESTED,
+                event_version="1.0",
+                workspace_id=updated.workspace_id,
+                run_id=updated.id,
+                correlation_id=request_id,
+                payload_ref={
+                    "feedback": "AgentWorkflowRun.input.human_feedback",
+                    "precedence": "REVIEWER",
+                },
+            ),
+        )
     unit_of_work.commit()
     try:
         queue.enqueue_agent_workflow(run_id=run_id, request_id=request_id)
