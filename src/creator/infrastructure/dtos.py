@@ -706,7 +706,7 @@ class SqlAlchemyWorkspaceRepository:
             raise EntityNotFoundError("Workspace not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Workspace]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return (
             select(models.Workspace)
             .join(
@@ -848,12 +848,12 @@ class SqlAlchemyBrandRepository:
             minimum_role="editor",
         ):
             raise EntityNotFoundError("Brand not found")
-        return row
+        return cast(models.Brand, row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Brand]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_select(user_id, models.Brand)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_count(user_id, models.Brand)
 
 
@@ -976,12 +976,12 @@ class SqlAlchemyProjectRepository:
             minimum_role="editor",
         ):
             raise EntityNotFoundError("Project not found")
-        return row
+        return cast(models.Project, row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Project]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_select(user_id, models.Project)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_count(user_id, models.Project)
 
 
@@ -1006,7 +1006,7 @@ def _scoped_resource_select(user_id: UUID, model: type[Any]) -> Select[Any]:
     )
 
 
-def _scoped_resource_count(user_id: UUID, model: type[Any]) -> Select[tuple[int]]:
+def _scoped_resource_count(user_id: UUID, model: type[Any]) -> Select[Any]:
     return (
         select(func.count())
         .select_from(model)
@@ -1249,7 +1249,7 @@ class SqlAlchemyContentRepository:
         row.updated_at = timestamp
         flush_or_raise(self._session)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Content]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return (
             select(models.Content)
             .join(
@@ -1263,7 +1263,7 @@ class SqlAlchemyContentRepository:
             .where(models.WorkspaceMembership.deleted_at.is_(None))
         )
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[Any]:
         return (
             select(func.count())
             .select_from(models.Content)
@@ -1434,12 +1434,12 @@ class SqlAlchemyGenerationRepository:
             minimum_role="editor",
         ):
             raise EntityNotFoundError("Generation not found")
-        return row
+        return cast(models.Generation, row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Generation]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_select(user_id, models.Generation)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_count(user_id, models.Generation)
 
 
@@ -1574,12 +1574,12 @@ class SqlAlchemyAssetRepository:
             minimum_role="editor",
         ):
             raise EntityNotFoundError("Asset not found")
-        return row
+        return cast(models.Asset, row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Asset]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_select(user_id, models.Asset)
 
-    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_count(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_count(user_id, models.Asset)
 
 
@@ -1689,9 +1689,9 @@ class SqlAlchemyBrandSettingsRepository:
             minimum_role="editor",
         ):
             raise EntityNotFoundError("Brand settings not found")
-        return row
+        return cast(models.BrandSettings, row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.BrandSettings]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_select(user_id, models.BrandSettings)
 
 
@@ -1940,7 +1940,7 @@ class SqlAlchemyAgentWorkflowRepository:
         flush_or_raise(self._session)
         return _agent_workflow_run_record(row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.AgentWorkflowRun]]:
+    def _scoped_select(self, user_id: UUID) -> Select[Any]:
         return _scoped_resource_select(user_id, models.AgentWorkflowRun)
 
 

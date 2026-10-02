@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, asc, desc, func, select
@@ -200,7 +201,7 @@ class SqlAlchemyPersonaRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.Persona]]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.Persona)
             .join(models.Brand, models.Brand.id == schema_models.Persona.brand_id)
@@ -312,7 +313,7 @@ class SqlAlchemyPlanningRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.Planning]]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.Planning)
             .join(
@@ -379,7 +380,7 @@ class SqlAlchemyCampaignRepository(_CampaignRepositoryBase):
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.Campaign]]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.Campaign)
             .join(
@@ -532,7 +533,7 @@ class SqlAlchemyPostStructureRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.PostStructure]]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.PostStructure)
             .join(
@@ -633,7 +634,7 @@ class SqlAlchemyBrandAssetRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[tuple[schema_models.BrandAsset]]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.BrandAsset)
             .join(models.Brand, models.Brand.id == schema_models.BrandAsset.brand_id)
