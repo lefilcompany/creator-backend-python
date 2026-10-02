@@ -13,6 +13,7 @@ from creator.integrations.gemini.image_generator import (
     GeminiImageGenerationResult,
 )
 from creator.repositories import GenerationJobRecord, ImageGenerationWorkItem, UserRecord
+from creator.services.storage.provider import StorageValidationError
 from creator.workers import image_generation
 
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
@@ -223,6 +224,40 @@ def test_run_image_generation_marks_permanent_failure_failed(
     image_generation.run_image_generation("50000000-0000-0000-0000-000000000001")
 
     assert repository.failed[0]["failure_code"] == "PROVIDER_CONTENT_BLOCKED"
+
+
+def test_run_image_generation_marks_storage_validation_failure_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = FakeImageGenerationRepository(work_item())
+    generator = FakeImageGenerator()
+    patch_worker(monkeypatch, repository=repository, generator=generator)
+    monkeypatch.setattr(
+        image_generation,
+        "persist_generated_image",
+        lambda **kwargs: (_ for _ in ()).throw(StorageValidationError("invalid image")),
+    )
+
+    image_generation.run_image_generation("50000000-0000-0000-0000-000000000001")
+
+    assert repository.failed[0]["failure_code"] == "STORAGE_UPLOAD_FAILED"
+
+
+def test_run_image_generation_does_not_retry_unknown_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = FakeImageGenerationRepository(work_item(attempt_count=1, max_attempts=3))
+    generator = FakeImageGenerator()
+    patch_worker(monkeypatch, repository=repository, generator=generator)
+    monkeypatch.setattr(
+        image_generation,
+        "persist_generated_image",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("bug")),
+    )
+
+    image_generation.run_image_generation("50000000-0000-0000-0000-000000000001")
+
+    assert repository.failed[0]["failure_code"] == "IMAGE_GENERATION_FAILED"
 
 
 def test_recover_stale_processing_jobs_marks_old_jobs_failed(
