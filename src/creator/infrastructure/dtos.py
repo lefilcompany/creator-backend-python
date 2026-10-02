@@ -15,6 +15,7 @@ from creator.domain.agent_workflow import (
     AgentWorkflowStepStatus,
     HumanReviewMode,
     can_transition_agent_workflow,
+    can_transition_agent_workflow_step,
 )
 from creator.domain.exceptions import (
     ConcurrencyError,
@@ -1782,6 +1783,17 @@ class SqlAlchemyAgentWorkflowRepository:
         attempt: int,
         input: JsonObject,
     ) -> AgentWorkflowStepRecord:
+        run = self._session.scalars(
+            select(models.AgentWorkflowRun)
+            .where(
+                models.AgentWorkflowRun.id == run_id,
+                models.AgentWorkflowRun.workspace_id == workspace_id,
+                models.AgentWorkflowRun.deleted_at.is_(None),
+            )
+            .with_for_update()
+        ).one_or_none()
+        if run is None:
+            raise EntityNotFoundError("Agent workflow not found")
         row = models.AgentWorkflowStep(
             run_id=run_id,
             workspace_id=workspace_id,
@@ -1822,6 +1834,8 @@ class SqlAlchemyAgentWorkflowRepository:
         ).one_or_none()
         if row is None:
             raise EntityNotFoundError("Agent workflow step not found")
+        if not can_transition_agent_workflow_step(row.status, AgentWorkflowStepStatus.COMPLETED):
+            raise InvalidStateTransitionError(f"Cannot complete step in {row.status} state")
         row.status = AgentWorkflowStepStatus.COMPLETED
         row.output_json = _json(output)
         row.prompt = prompt
@@ -1847,6 +1861,8 @@ class SqlAlchemyAgentWorkflowRepository:
         ).one_or_none()
         if row is None:
             raise EntityNotFoundError("Agent workflow step not found")
+        if not can_transition_agent_workflow_step(row.status, AgentWorkflowStepStatus.FAILED):
+            raise InvalidStateTransitionError(f"Cannot fail step in {row.status} state")
         row.status = AgentWorkflowStepStatus.FAILED
         row.error_code = error_code
         row.error_message = error_message[:2_000]

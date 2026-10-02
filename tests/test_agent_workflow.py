@@ -24,6 +24,7 @@ from creator.domain.agent_workflow import (
     HumanReviewMode,
     WorkflowDecision,
     can_transition_agent_workflow,
+    can_transition_agent_workflow_step,
 )
 from creator.repositories import (
     AgentWorkflowRunRecord,
@@ -159,6 +160,18 @@ def test_agent_workflow_transitions_are_explicit() -> None:
     )
     assert not can_transition_agent_workflow(
         AgentWorkflowStatus.COMPLETED, AgentWorkflowStatus.RUNNING
+    )
+
+
+def test_agent_workflow_step_transitions_are_explicit() -> None:
+    assert can_transition_agent_workflow_step(
+        AgentWorkflowStepStatus.RUNNING, AgentWorkflowStepStatus.COMPLETED
+    )
+    assert can_transition_agent_workflow_step(
+        AgentWorkflowStepStatus.RUNNING, AgentWorkflowStepStatus.FAILED
+    )
+    assert not can_transition_agent_workflow_step(
+        AgentWorkflowStepStatus.COMPLETED, AgentWorkflowStepStatus.RUNNING
     )
 
 

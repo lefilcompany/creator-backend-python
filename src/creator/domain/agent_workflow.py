@@ -73,3 +73,21 @@ def can_transition_agent_workflow(
     current: AgentWorkflowStatus, target: AgentWorkflowStatus
 ) -> bool:
     return target in ALLOWED_AGENT_WORKFLOW_TRANSITIONS[current]
+
+
+ALLOWED_AGENT_WORKFLOW_STEP_TRANSITIONS: dict[
+    AgentWorkflowStepStatus, frozenset[AgentWorkflowStepStatus]
+] = {
+    AgentWorkflowStepStatus.PENDING: frozenset({AgentWorkflowStepStatus.RUNNING}),
+    AgentWorkflowStepStatus.RUNNING: frozenset(
+        {AgentWorkflowStepStatus.COMPLETED, AgentWorkflowStepStatus.FAILED}
+    ),
+    AgentWorkflowStepStatus.COMPLETED: frozenset(),
+    AgentWorkflowStepStatus.FAILED: frozenset(),
+}
+
+
+def can_transition_agent_workflow_step(
+    current: AgentWorkflowStepStatus, target: AgentWorkflowStepStatus
+) -> bool:
+    return target in ALLOWED_AGENT_WORKFLOW_STEP_TRANSITIONS[current]
