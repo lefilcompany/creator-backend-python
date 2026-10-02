@@ -706,7 +706,7 @@ class SqlAlchemyWorkspaceRepository:
             raise EntityNotFoundError("Workspace not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.Workspace]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Workspace]]:
         return (
             select(models.Workspace)
             .join(
@@ -850,10 +850,10 @@ class SqlAlchemyBrandRepository:
             raise EntityNotFoundError("Brand not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.Brand]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Brand]]:
         return _scoped_resource_select(user_id, models.Brand)
 
-    def _scoped_count(self, user_id: UUID) -> Select[int]:
+    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
         return _scoped_resource_count(user_id, models.Brand)
 
 
@@ -978,10 +978,10 @@ class SqlAlchemyProjectRepository:
             raise EntityNotFoundError("Project not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.Project]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Project]]:
         return _scoped_resource_select(user_id, models.Project)
 
-    def _scoped_count(self, user_id: UUID) -> Select[int]:
+    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
         return _scoped_resource_count(user_id, models.Project)
 
 
@@ -1006,7 +1006,7 @@ def _scoped_resource_select(user_id: UUID, model: type[Any]) -> Select[Any]:
     )
 
 
-def _scoped_resource_count(user_id: UUID, model: type[Any]) -> Select[int]:
+def _scoped_resource_count(user_id: UUID, model: type[Any]) -> Select[tuple[int]]:
     return (
         select(func.count())
         .select_from(model)
@@ -1210,13 +1210,19 @@ class SqlAlchemyContentRepository:
         self,
         content_id: UUID,
         *,
+        user_id: UUID,
         brand_id: UUID | None = None,
         project_id: UUID | None = None,
         title: str | None = None,
         payload: JsonObject | None = None,
     ) -> ContentRecord:
-        row = self._session.get(models.Content, content_id)
-        if row is None or row.deleted_at is not None:
+        row = self._session.scalars(
+            self._scoped_select(user_id).where(
+                models.Content.id == content_id,
+                models.Content.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        if row is None:
             raise EntityNotFoundError("Content not found")
         if title is not None:
             row.title = title
@@ -1230,8 +1236,10 @@ class SqlAlchemyContentRepository:
         flush_or_raise(self._session)
         return _content_record(row)
 
-    def soft_delete(self, content_id: UUID) -> None:
-        row = self._session.get(models.Content, content_id)
+    def soft_delete(self, *, user_id: UUID, content_id: UUID) -> None:
+        row = self._session.scalars(
+            self._scoped_select(user_id).where(models.Content.id == content_id)
+        ).one_or_none()
         if row is None:
             raise EntityNotFoundError("Content not found")
         if row.deleted_at is not None:
@@ -1241,7 +1249,7 @@ class SqlAlchemyContentRepository:
         row.updated_at = timestamp
         flush_or_raise(self._session)
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.Content]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Content]]:
         return (
             select(models.Content)
             .join(
@@ -1255,7 +1263,7 @@ class SqlAlchemyContentRepository:
             .where(models.WorkspaceMembership.deleted_at.is_(None))
         )
 
-    def _scoped_count(self, user_id: UUID) -> Select[int]:
+    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
         return (
             select(func.count())
             .select_from(models.Content)
@@ -1321,6 +1329,15 @@ class SqlAlchemyGenerationRepository:
             minimum_role="editor",
         ):
             raise EntityNotFoundError("Workspace not found")
+        content = self._session.scalars(
+            select(models.Content).where(
+                models.Content.id == content_id,
+                models.Content.workspace_id == workspace_id,
+                models.Content.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        if content is None:
+            raise EntityNotFoundError("Content not found")
         row = models.Generation(
             workspace_id=workspace_id,
             content_id=content_id,
@@ -1419,10 +1436,10 @@ class SqlAlchemyGenerationRepository:
             raise EntityNotFoundError("Generation not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.Generation]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Generation]]:
         return _scoped_resource_select(user_id, models.Generation)
 
-    def _scoped_count(self, user_id: UUID) -> Select[int]:
+    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
         return _scoped_resource_count(user_id, models.Generation)
 
 
@@ -1559,10 +1576,10 @@ class SqlAlchemyAssetRepository:
             raise EntityNotFoundError("Asset not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.Asset]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.Asset]]:
         return _scoped_resource_select(user_id, models.Asset)
 
-    def _scoped_count(self, user_id: UUID) -> Select[int]:
+    def _scoped_count(self, user_id: UUID) -> Select[tuple[int]]:
         return _scoped_resource_count(user_id, models.Asset)
 
 
@@ -1674,7 +1691,7 @@ class SqlAlchemyBrandSettingsRepository:
             raise EntityNotFoundError("Brand settings not found")
         return row
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.BrandSettings]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.BrandSettings]]:
         return _scoped_resource_select(user_id, models.BrandSettings)
 
 
@@ -1923,7 +1940,7 @@ class SqlAlchemyAgentWorkflowRepository:
         flush_or_raise(self._session)
         return _agent_workflow_run_record(row)
 
-    def _scoped_select(self, user_id: UUID) -> Select[models.AgentWorkflowRun]:
+    def _scoped_select(self, user_id: UUID) -> Select[tuple[models.AgentWorkflowRun]]:
         return _scoped_resource_select(user_id, models.AgentWorkflowRun)
 
 
@@ -1943,6 +1960,13 @@ class SqlAlchemyImageGenerationRepository:
         external_id: str | None = None,
         max_attempts: int = 1,
     ) -> GenerationJobRecord:
+        if requested_by_user_id is None or not _user_has_workspace_role(
+            self._session,
+            user_id=requested_by_user_id,
+            workspace_id=workspace_id,
+            minimum_role="editor",
+        ):
+            raise EntityNotFoundError("Content not found")
         content = self._session.scalars(
             select(models.Content).where(
                 models.Content.id == content_id,
@@ -2291,7 +2315,7 @@ class SqlAlchemyImageGenerationRepository:
             ),
         )
 
-    def _scoped_job_count(self, user_id: UUID) -> Select[int]:
+    def _scoped_job_count(self, user_id: UUID) -> Select[tuple[int]]:
         return (
             select(func.count())
             .select_from(models.GenerationJob)

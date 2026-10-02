@@ -104,10 +104,11 @@ class ContentRepository(Protocol):
         self,
         content_id: UUID,
         *,
+        user_id: UUID,
         brand_id: UUID | None = None,
         project_id: UUID | None = None,
         title: str | None = None,
         payload: JsonObject | None = None,
     ) -> ContentRecord: ...
 
-    def soft_delete(self, content_id: UUID) -> None: ...
+    def soft_delete(self, *, user_id: UUID, content_id: UUID) -> None: ...
