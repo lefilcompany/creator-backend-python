@@ -5,9 +5,9 @@ from creator.infrastructure.db import Base
 from creator.infrastructure.models import (
     Asset,
     Brand,
-    BrandSettings,
     BrandKnowledgeChunk,
     BrandKnowledgeDocument,
+    BrandSettings,
     Content,
     ContentType,
     CreditPrice,
@@ -121,10 +121,16 @@ def test_credit_ledger_constraints_and_indexes_are_explicit() -> None:
 
 
 def test_brand_knowledge_constraints_and_indexes_are_explicit() -> None:
-    assert "uq_bk_documents_scope" in constraint_names("brand_knowledge_documents", UniqueConstraint)
-    assert "uq_bk_chunks_document_index" in constraint_names("brand_knowledge_chunks", UniqueConstraint)
+    assert "uq_bk_documents_scope" in constraint_names(
+        "brand_knowledge_documents", UniqueConstraint
+    )
+    assert "uq_bk_chunks_document_index" in constraint_names(
+        "brand_knowledge_chunks", UniqueConstraint
+    )
     assert {"ix_bk_documents_workspace_brand"} <= index_names("brand_knowledge_documents")
-    assert {"ix_bk_chunks_workspace_brand", "ix_bk_chunks_document_index"} <= index_names("brand_knowledge_chunks")
+    assert {"ix_bk_chunks_workspace_brand", "ix_bk_chunks_document_index"} <= index_names(
+        "brand_knowledge_chunks"
+    )
     chunk_checks = constraint_names("brand_knowledge_chunks", CheckConstraint)
     assert {
         "ck_bk_chunks_index_nonnegative",
