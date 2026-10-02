@@ -6,6 +6,7 @@ from .assets import Asset, Image
 from .brand import Brand, BrandSettings
 from .content import Content
 from .core import Settings, User, Workspace, WorkspaceMembership
+from .credits import CreditPrice, CreditTransaction, CreditWallet
 from .enums import ContentType, GenerationType, GlobalRole, WorkspaceRole
 from .generation import Generation, GenerationJob, GenerationJobStatusEvent
 from .project import Project
@@ -19,6 +20,9 @@ __all__ = [
     "Brand",
     "BrandSettings",
     "Content",
+    "CreditPrice",
+    "CreditTransaction",
+    "CreditWallet",
     "Generation",
     "GenerationJob",
     "GenerationJobStatusEvent",
