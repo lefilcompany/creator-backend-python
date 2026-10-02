@@ -24,6 +24,8 @@ from creator.services.agents.contracts import (
     PlannerOutput,
     WriterOutput,
 )
+from creator.services.agents.factory import create_multi_agent_orchestrator
+from creator.services.agents.orchestrator import MultiAgentOrchestrator
 from creator.services.agents.pipeline import (
     PipelineEnvelope,
     consume,
@@ -31,8 +33,7 @@ from creator.services.agents.pipeline import (
     emit,
     stable_hash,
 )
-from creator.services.agents.runner import StructuredAgentRunner
-from creator.services.ai.factory import create_image_reviewer, create_llm_provider
+from creator.services.ai.factory import create_image_reviewer
 from creator.services.ai.image_provider import (
     ImageGenerationRequest,
     ImageGenerationResult,
@@ -61,7 +62,7 @@ def run_image_agent_workflow(
         if run is None or user is None:
             return
         brand, brand_settings = _load_brand_context(run, user.id)
-        runner = StructuredAgentRunner(create_llm_provider(settings))
+        orchestrator = create_multi_agent_orchestrator(settings)
         completed_business = _completed_stage_output(run.id, AgentWorkflowStepRole.BUSINESS)
         if completed_business is None:
             business = _execute_agent_step(
@@ -73,7 +74,7 @@ def run_image_agent_workflow(
                     "brand_settings": brand_settings,
                     "knowledge": _knowledge(run),
                 },
-                runner=runner,
+                orchestrator=orchestrator,
                 output_model=BusinessOutput,
             )
         else:
@@ -112,7 +113,7 @@ def run_image_agent_workflow(
                         "context_hash": business_envelope.provenance.context_hash,
                     },
                 },
-                runner=runner,
+                orchestrator=orchestrator,
                 output_model=PlannerOutput,
             )
         planner_envelope = emit(
@@ -163,7 +164,7 @@ def run_image_agent_workflow(
                         "feedback": str(run.input.get("human_feedback", "")),
                         "item": index,
                     },
-                    runner=runner,
+                    orchestrator=orchestrator,
                     output_model=WriterOutput,
                 )
             _advance_stage(run.id, AgentWorkflowStatus.RUNNING, "ARTIST")
@@ -185,7 +186,7 @@ def run_image_agent_workflow(
                 planner_envelope=planner_envelope,
                 post=post.model_dump(mode="json"),
                 feedback=feedback,
-                runner=runner,
+                orchestrator=orchestrator,
                 settings=settings,
             )
             final_image_ids.append(str(accepted_image))
@@ -472,7 +473,7 @@ def _execute_agent_step[OutputModel: BaseModel](
     run_id: UUID,
     role: AgentWorkflowStepRole,
     inputs: Mapping[str, object],
-    runner: StructuredAgentRunner,
+    orchestrator: MultiAgentOrchestrator,
     output_model: type[OutputModel],
 ) -> OutputModel:
     with SqlAlchemyUnitOfWork() as unit_of_work:
@@ -507,7 +508,7 @@ def _execute_agent_step[OutputModel: BaseModel](
         )
         unit_of_work.commit()
     try:
-        result = runner.run(
+        result = orchestrator.execute(
             AgentExecutionContext(
                 workspace_id=run.workspace_id,
                 brand_id=run.brand_id,
@@ -580,7 +581,7 @@ def _run_post_until_accepted(
     planner_envelope: PipelineEnvelope,
     post: JsonObject,
     feedback: str,
-    runner: StructuredAgentRunner,
+    orchestrator: MultiAgentOrchestrator,
     settings: object,
 ) -> UUID:
     from creator.config import Settings
@@ -604,7 +605,7 @@ def _run_post_until_accepted(
                 "feedback": feedback,
                 "item": index,
             },
-            runner=runner,
+            orchestrator=orchestrator,
             output_model=WriterOutput,
         )
         image_record, generated = _generate_workflow_image(

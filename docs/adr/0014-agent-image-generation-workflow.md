@@ -18,6 +18,8 @@ O Revisor usa uma interface multimodal provider-neutral. RAG é opcional e sempr
 
 ## Consequências
 
+O worker resolve o orquestrador pela factory; o Flow controlado pelo Creator preserva execução determinística por especialista.
+
 O sistema passa a ter maior latência e custo por execução, compensados por prompts especializados, validação de schemas, revisão objetiva, idempotência, limites e rastreabilidade. Os endpoints existentes de geração direta permanecem compatíveis durante a migração. Nenhum SDK de Provider ou CrewAI pode ser importado por domínio, aplicação ou endpoint.
 
 ## Issues vinculadas

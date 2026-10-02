@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -29,4 +30,16 @@ class CrewAIMultiAgentOrchestrator:
     def execute(
         self, context: AgentExecutionContext, output_model: type[BaseModel]
     ) -> AgentExecutionResult:
-        return self._runner.run(context, output_model)
+        if not isinstance(context.workspace_id, UUID) or not isinstance(context.brand_id, UUID):
+            raise ValueError("Specialist execution requires authorized Workspace and Brand scope")
+        result = self._runner.run(context, output_model)
+        # CrewAI/provider responses are untrusted data; enforce the application contract here.
+        validated = output_model.model_validate(result.output.model_dump(mode="json"))
+        return AgentExecutionResult(
+            output=validated,
+            prompt=result.prompt,
+            input_hash=result.input_hash,
+            provider=result.provider,
+            model=result.model,
+            metadata={**result.metadata, "runtime": "crewai-adapter", "execution": "deterministic"},
+        )

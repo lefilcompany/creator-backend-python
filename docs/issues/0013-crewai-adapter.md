@@ -9,6 +9,8 @@ Implementar o adapter CrewAI por trás de `MultiAgentOrchestrator`, preservando 
 
 ## Acceptance criteria
 
+- O worker obtém o orquestrador pela factory; a implementação inicial escolhe um Flow controlado pelo Creator.
+
 - O adapter concreto é o único ponto do código da aplicação que importa CrewAI.
 - Nenhum workflow multiagentes confia em Workspace informado pelo cliente sem autorização.
 - Entradas e saídas dos agentes são validadas antes de interagir com Content, Generation ou Generation Job.
