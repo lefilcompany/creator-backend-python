@@ -52,7 +52,7 @@ ADRs relacionadas: ADR-004, ADR-006, ADR-008 e ADR-011 Core Resource CRUD.
 - SQLAlchemy fica restrito a infraestrutura.
 - Alembic controla as migrations reproduziveis.
 - Casos de uso dependem de repositorios e Unit of Work, nao de `Session` SQLAlchemy diretamente.
-- Existem migrations ate `0008_content_query_indexes`.
+- Existem migrations ate `0017_brand_knowledge`, incluindo ledger de créditos, outbox/pipeline e persistência de Brand Knowledge.
 - O modelo relacional inclui Users, Settings, Workspaces, Workspace Memberships, Brands, Brand Settings, Projects, Contents, Generations, Generation Jobs, Generation Job Status Events, Images e Assets.
 - Recursos sujeitos a remocao de negocio usam `deleted_at` para Soft Delete.
 - Indices de consulta foram adicionados para Content, incluindo ordenacao por Workspace e busca textual com `pg_trgm`.

@@ -6,6 +6,8 @@ from creator.infrastructure.models import (
     Asset,
     Brand,
     BrandSettings,
+    BrandKnowledgeChunk,
+    BrandKnowledgeDocument,
     Content,
     ContentType,
     CreditPrice,
@@ -45,6 +47,8 @@ def test_initial_relational_model_tables_are_registered() -> None:
         WorkspaceMembership.__tablename__,
         Brand.__tablename__,
         BrandSettings.__tablename__,
+        BrandKnowledgeDocument.__tablename__,
+        BrandKnowledgeChunk.__tablename__,
         Project.__tablename__,
         Content.__tablename__,
         Generation.__tablename__,
@@ -114,6 +118,20 @@ def test_credit_ledger_constraints_and_indexes_are_explicit() -> None:
         "ix_credit_transactions_workspace_action",
         "ix_credit_transactions_workspace_user",
     } <= index_names("credit_transactions")
+
+
+def test_brand_knowledge_constraints_and_indexes_are_explicit() -> None:
+    assert "uq_bk_documents_scope" in constraint_names("brand_knowledge_documents", UniqueConstraint)
+    assert "uq_bk_chunks_document_index" in constraint_names("brand_knowledge_chunks", UniqueConstraint)
+    assert {"ix_bk_documents_workspace_brand"} <= index_names("brand_knowledge_documents")
+    assert {"ix_bk_chunks_workspace_brand", "ix_bk_chunks_document_index"} <= index_names("brand_knowledge_chunks")
+    chunk_checks = constraint_names("brand_knowledge_chunks", CheckConstraint)
+    assert {
+        "ck_bk_chunks_index_nonnegative",
+        "ck_bk_chunks_embedding_array",
+        "ck_bk_chunks_metadata_object",
+        "ck_bk_chunks_content_length",
+    } <= chunk_checks
 
 
 def test_history_and_queue_indexes_are_explicit() -> None:

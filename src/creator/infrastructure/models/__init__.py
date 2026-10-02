@@ -4,6 +4,7 @@ from creator.infrastructure.db import Base
 
 from .assets import Asset, Image
 from .brand import Brand, BrandSettings
+from .brand_knowledge import BrandKnowledgeChunk, BrandKnowledgeDocument
 from .content import Content
 from .core import Settings, User, Workspace, WorkspaceMembership
 from .credits import CreditPrice, CreditTransaction, CreditWallet
@@ -19,6 +20,8 @@ __all__ = [
     "Asset",
     "Brand",
     "BrandSettings",
+    "BrandKnowledgeChunk",
+    "BrandKnowledgeDocument",
     "Content",
     "CreditPrice",
     "CreditTransaction",
