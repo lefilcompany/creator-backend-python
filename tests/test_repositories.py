@@ -477,7 +477,7 @@ def test_brand_project_asset_generation_and_settings_repositories_crud_paths() -
     )
 
     generation_repository = SqlAlchemyGenerationRepository(fake_session(session))
-    session.scalars_results.append(ScalarResult(membership))
+    session.scalars_results.extend([ScalarResult(membership), ScalarResult(content)])
     assert (
         generation_repository.add(
             workspace_id=workspace.id,
@@ -607,11 +607,18 @@ def test_content_repository_crud_pagination_and_soft_delete() -> None:
     )
     assert page.total == 1
 
-    session.get_results.append(content)
-    assert repository.update(content.id, title="Updated").title == "Updated"
+    session.scalars_results.append(ScalarResult(content))
+    assert (
+        repository.update(
+            content.id,
+            user_id=content.created_by_user_id,
+            title="Updated",
+        ).title
+        == "Updated"
+    )
 
-    session.get_results.append(content)
-    repository.soft_delete(content.id)
+    session.scalars_results.append(ScalarResult(content))
+    repository.soft_delete(user_id=content.created_by_user_id, content_id=content.id)
     assert content.deleted_at is not None
 
 
@@ -639,8 +646,8 @@ def test_content_repository_soft_delete_is_idempotent_for_deleted_content() -> N
     repository = SqlAlchemyContentRepository(fake_session(session))
     content = content_row(deleted_at=NOW)
 
-    session.get_results.append(content)
-    repository.soft_delete(content.id)
+    session.scalars_results.append(ScalarResult(content))
+    repository.soft_delete(user_id=content.created_by_user_id, content_id=content.id)
 
     assert content.deleted_at == NOW
 
@@ -699,7 +706,13 @@ def test_image_generation_repository_lifecycle_paths() -> None:
     pending_job = job_row(generation, GenerationJobStatus.PENDING)
     processing_job = job_row(generation, GenerationJobStatus.PROCESSING)
 
-    session.scalars_results.append(ScalarResult(content))
+    image_user = user_row()
+    image_user.id = content.created_by_user_id
+    image_workspace = workspace_row()
+    image_workspace.id = content.workspace_id
+    session.scalars_results.extend(
+        [ScalarResult(membership_row(image_user, image_workspace)), ScalarResult(content)]
+    )
     created = repository.create_image_generation(
         workspace_id=content.workspace_id,
         content_id=content.id,
