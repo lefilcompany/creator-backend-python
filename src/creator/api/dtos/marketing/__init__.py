@@ -11,3 +11,8 @@ __all__ = [
     "PostStructureCreateRequest",
     "PostStructureUpdateRequest",
 ]
+from .campaign_update import CampaignUpdateRequest
+from .persona_update import PersonaUpdateRequest
+from .planning_update import PlanningUpdateRequest
+
+__all__ = ["CampaignUpdateRequest", "PersonaUpdateRequest", "PlanningUpdateRequest"]

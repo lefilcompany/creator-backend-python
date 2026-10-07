@@ -34,6 +34,47 @@ class CreatedWorkspaceRecord:
     membership: WorkspaceMembershipRecord
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceInviteRecord:
+    id: UUID
+    workspace_id: UUID
+    type: str
+    role: str
+    email: str | None
+    max_uses: int | None
+    uses_count: int
+    status: str
+    is_active: bool
+    created_by: UUID
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
+class WorkspaceInviteRepository(Protocol):
+    def list_for_user(
+        self, *, user_id: UUID, workspace_id: UUID | None = None
+    ) -> list[WorkspaceInviteRecord]: ...
+    def get_for_user(self, *, user_id: UUID, invite_id: UUID) -> WorkspaceInviteRecord | None: ...
+    def add(
+        self,
+        *,
+        workspace_id: UUID,
+        created_by: UUID,
+        type: str,
+        role: str,
+        email: str | None,
+        max_uses: int | None,
+        expires_at: datetime | None,
+        token: str,
+    ) -> WorkspaceInviteRecord: ...
+    def update(self, *, invite_id: UUID, fields: dict[str, object]) -> WorkspaceInviteRecord: ...
+    def soft_delete(self, *, invite_id: UUID) -> None: ...
+
+
 class WorkspaceRepository(Protocol):
     def add(self, *, name: str, owner_user_id: UUID) -> WorkspaceRecord: ...
 

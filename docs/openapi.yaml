@@ -44,6 +44,10 @@ tags:
     description: Campaign planning records and Persona snapshots.
   - name: Post Structures
     description: Contract-first post content structures.
+  - name: Notifications
+    description: Principal notification settings and devices.
+  - name: Billing
+    description: Billing plan administration endpoints.
   - name: Brand Assets
     description: Brand-owned assets from the database schema.
 paths:
@@ -390,6 +394,33 @@ paths:
         '200': { description: Campaign detail. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateCampaign
+      tags: [Campaigns]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CampaignUpdateRequest' }
+      responses:
+        '200': { description: Campaign updated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteCampaign
+      tags: [Campaigns]
+      security:
+        - SupabaseBearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+      responses:
+        '200': { description: Campaign soft-deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/personas:
     get:
       operationId: listPersonas
@@ -404,6 +435,39 @@ paths:
       responses:
         '200': { description: Paginated brand personas. }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/personas/{id}:
+    get:
+      operationId: getPersona
+      tags: [Personas]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses:
+        '200': { description: Persona detail. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updatePersona
+      tags: [Personas]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonaUpdateRequest' }
+      responses:
+        '200': { description: Persona updated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deletePersona
+      tags: [Personas]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses:
+        '200': { description: Persona soft-deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       operationId: createPersona
       tags: [Personas]
@@ -431,6 +495,39 @@ paths:
       responses:
         '200': { description: Paginated campaign planning records. }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/planning/{id}:
+    get:
+      operationId: getPlanning
+      tags: [Planning]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses:
+        '200': { description: Planning detail. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updatePlanning
+      tags: [Planning]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanningUpdateRequest' }
+      responses:
+        '200': { description: Planning updated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deletePlanning
+      tags: [Planning]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses:
+        '200': { description: Planning soft-deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       operationId: createPlanning
       tags: [Planning]
@@ -692,6 +789,29 @@ paths:
         '200': { description: Brand asset detail. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateBrandAsset
+      tags: [Brand Assets]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandAssetUpdateRequest' }
+      responses:
+        '200': { description: Brand asset updated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteBrandAsset
+      tags: [Brand Assets]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses:
+        '200': { description: Brand asset soft-deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/generated-images/{id}:
     get:
       operationId: getGeneratedImage
@@ -704,7 +824,158 @@ paths:
         '200': { description: Generated image detail. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /api/v1/assets:
+  /api/v1/plan-items:
+    get:
+      operationId: listPlanItems
+      tags: [Billing]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters:
+        - name: plan_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses: { '200': { description: Plan items. } }
+    post:
+      operationId: createPlanItem
+      tags: [Billing]
+      security: [{ SupabaseBearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlanItemCreateRequest' } } }
+      responses: { '201': { description: Plan item created. } }
+  /api/v1/plan-items/{id}:
+    get:
+      operationId: getPlanItem
+      tags: [Billing]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: Plan item detail. } }
+    put:
+      operationId: updatePlanItem
+      tags: [Billing]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlanItemUpdateRequest' } } }
+      responses: { '200': { description: Plan item updated. } }
+    delete:
+      operationId: deletePlanItem
+      tags: [Billing]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: Plan item soft-deleted. } }
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters:
+        - name: workspace_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses: { '200': { description: Notifications. } }
+    post:
+      operationId: createNotification
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NotificationCreateRequest' } } }
+      responses: { '201': { description: Notification created. } }
+  /api/v1/notifications/{id}:
+    get:
+      operationId: getNotification
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: Notification detail. } }
+    put:
+      operationId: updateNotification
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NotificationUpdateRequest' } } }
+      responses: { '200': { description: Notification updated. } }
+    delete:
+      operationId: deleteNotification
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: Notification soft-deleted. } }
+  /api/v1/user-devices:
+    get:
+      operationId: listUserDevices
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      responses: { '200': { description: User devices. } }
+    post:
+      operationId: createUserDevice
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UserDeviceCreateRequest' } } }
+      responses: { '201': { description: User device created. } }
+  /api/v1/user-devices/{id}:
+    get:
+      operationId: getUserDevice
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: User device detail. } }
+    put:
+      operationId: updateUserDevice
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UserDeviceUpdateRequest' } } }
+      responses: { '200': { description: User device updated. } }
+    delete:
+      operationId: deleteUserDevice
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: User device soft-deleted. } }
+  /api/v1/notification-preferences:
+    get:
+      operationId: listNotificationPreferences
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      responses: { '200': { description: Notification preferences. } }
+    post:
+      operationId: createNotificationPreference
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferenceRequest' } } }
+      responses: { '201': { description: Notification preference created. } }
+  /api/v1/notification-preferences/{id}:
+    get:
+      operationId: getNotificationPreference
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: Notification preference detail. } }
+    put:
+      operationId: updateNotificationPreference
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferenceRequest' } } }
+      responses: { '200': { description: Notification preference updated. } }
+    delete:
+      operationId: deleteNotificationPreference
+      tags: [Notifications]
+      security: [{ SupabaseBearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+      responses: { '200': { description: Notification preference soft-deleted. } }
     get:
       operationId: listAssets
       tags: [Assets]
@@ -719,6 +990,17 @@ paths:
         - SupabaseBearerAuth: []
       responses:
         '201': { description: Asset metadata created in a writable Workspace. }
+  /api/v1/assets:
+    get:
+      operationId: listAssets
+      tags: [Assets]
+      security: [{ SupabaseBearerAuth: [] }]
+      responses: { '200': { description: Paginated assets. } }
+    post:
+      operationId: createAsset
+      tags: [Assets]
+      security: [{ SupabaseBearerAuth: [] }]
+      responses: { '201': { description: Asset created. } }
   /api/v1/assets/{id}:
     get:
       operationId: getAsset
@@ -1903,6 +2185,16 @@ components:
         voice: { type: [string, 'null'], maxLength: 20 }
         start_at: { type: [string, 'null'], format: date-time }
         end_at: { type: [string, 'null'], format: date-time }
+    CampaignUpdateRequest:
+      type: object
+      properties:
+        name: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        target_audience: { type: [string, 'null'], maxLength: 300 }
+        objectives: { type: [string, 'null'], maxLength: 400 }
+        voice: { type: [string, 'null'], maxLength: 20 }
+        start_at: { type: [string, 'null'], format: date-time }
+        end_at: { type: [string, 'null'], format: date-time }
     PostStructureCreateRequest:
       type: object
       required: [workspace_id, planning_id]
@@ -1942,6 +2234,51 @@ components:
         file_url: { type: string, minLength: 1, maxLength: 2048 }
         file_name: { type: [string, 'null'], maxLength: 255 }
         description: { type: [string, 'null'], maxLength: 500 }
+    BrandAssetUpdateRequest:
+      type: object
+      properties:
+        type: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        file_url: { type: [string, 'null'], minLength: 1, maxLength: 2048 }
+        file_name: { type: [string, 'null'], maxLength: 255 }
+        description: { type: [string, 'null'], maxLength: 500 }
+    NotificationCreateRequest:
+      type: object
+      required: [workspace_id, type, title, body]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        type: { type: string, minLength: 1, maxLength: 30 }
+        title: { type: string, minLength: 1, maxLength: 150 }
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        payload: { type: object, additionalProperties: true }
+        resource_type: { type: [string, 'null'], maxLength: 40 }
+        resource_id: { type: [string, 'null'], format: uuid }
+    NotificationUpdateRequest:
+      type: object
+      properties:
+        title: { type: [string, 'null'], minLength: 1, maxLength: 150 }
+        body: { type: [string, 'null'], minLength: 1, maxLength: 2000 }
+        payload: { type: [object, 'null'], additionalProperties: true }
+        resource_type: { type: [string, 'null'], maxLength: 40 }
+        resource_id: { type: [string, 'null'], format: uuid }
+    NotificationPreferenceRequest:
+      type: object
+      required: [type, channel]
+      properties:
+        type: { type: string, minLength: 1, maxLength: 30 }
+        channel: { type: string, minLength: 1, maxLength: 10 }
+        is_enabled: { type: boolean }
+    UserDeviceCreateRequest:
+      type: object
+      required: [platform, fcm_token]
+      properties:
+        platform: { type: string, minLength: 1, maxLength: 10 }
+        fcm_token: { type: string, minLength: 1, maxLength: 255 }
+    UserDeviceUpdateRequest:
+      type: object
+      properties:
+        platform: { type: [string, 'null'], minLength: 1, maxLength: 10 }
+        fcm_token: { type: [string, 'null'], minLength: 1, maxLength: 255 }
+        is_active: { type: [boolean, 'null'] }
     PlanningCreateRequest:
       type: object
       required: [brand_id, campaign_id, persona_id]
@@ -1956,12 +2293,58 @@ components:
         special_dates: { type: [string, 'null'], maxLength: 50 }
         start_period: { type: [string, 'null'], format: date-time }
         end_period: { type: [string, 'null'], format: date-time }
+    PlanningUpdateRequest:
+      type: object
+      properties:
+        info: { type: [string, 'null'], maxLength: 400 }
+        static_amount: { type: [integer, 'null'], minimum: 0 }
+        carousel_amount: { type: [integer, 'null'], minimum: 0 }
+        stories_amount: { type: [integer, 'null'], minimum: 0 }
+        special_dates: { type: [string, 'null'], maxLength: 50 }
+        start_period: { type: [string, 'null'], format: date-time }
+        end_period: { type: [string, 'null'], format: date-time }
+    PlanItemCreateRequest:
+      type: object
+      required: [plan_id, name, pricing_scheme_type]
+      properties:
+        plan_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1 }
+        description: { type: [string, 'null'] }
+        quantity: { type: integer, minimum: 1 }
+        cycles: { type: [integer, 'null'], minimum: 1 }
+        pricing_scheme_type: { type: string, minLength: 1 }
+        price_cents: { type: integer, minimum: 0 }
+        price_brackets: { type: [object, 'null'] }
+        status: { type: string }
+    PlanItemUpdateRequest:
+      type: object
+      properties:
+        name: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        quantity: { type: [integer, 'null'], minimum: 1 }
+        cycles: { type: [integer, 'null'], minimum: 1 }
+        pricing_scheme_type: { type: [string, 'null'] }
+        price_cents: { type: [integer, 'null'], minimum: 0 }
+        price_brackets: { type: [object, 'null'] }
+        status: { type: [string, 'null'] }
     PersonaCreateRequest:
       type: object
       required: [brand_id, name]
       properties:
         brand_id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 30 }
+        age: { type: [integer, 'null'], minimum: 0, maximum: 150 }
+        gender: { type: [string, 'null'], maxLength: 10 }
+        main_goal: { type: [string, 'null'], maxLength: 60 }
+        challenge: { type: [string, 'null'], maxLength: 50 }
+        interest: { type: [string, 'null'], maxLength: 200 }
+        routine: { type: [string, 'null'], maxLength: 300 }
+        journey: { type: [string, 'null'], maxLength: 250 }
+        trigger: { type: [string, 'null'], maxLength: 200 }
+    PersonaUpdateRequest:
+      type: object
+      properties:
+        name: { type: [string, 'null'], minLength: 1, maxLength: 30 }
         age: { type: [integer, 'null'], minimum: 0, maximum: 150 }
         gender: { type: [string, 'null'], maxLength: 10 }
         main_goal: { type: [string, 'null'], maxLength: 60 }

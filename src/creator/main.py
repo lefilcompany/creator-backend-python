@@ -23,14 +23,31 @@ from creator.api.dtos import (
     AssetUpdateRequest,
     AuthLoginRequest,
     AuthSignupRequest,
+    BillingAccountCreateRequest,
+    BillingAccountUpdateRequest,
+    BillingAddressCreateRequest,
+    BillingAddressUpdateRequest,
     BrandAssetCreateRequest,
+    BrandAssetUpdateRequest,
+    BrandColorCreateRequest,
+    BrandColorUpdateRequest,
     BrandCreateRequest,
     BrandSettingsUpdateRequest,
     BrandSettingsUpsertRequest,
     BrandUpdateRequest,
     CampaignCreateRequest,
+    CampaignUpdateRequest,
+    ChargeCreateRequest,
+    ChargeUpdateRequest,
     ContentCreateRequest,
     ContentUpdateRequest,
+    CouponCreateRequest,
+    CouponRedemptionCreateRequest,
+    CouponRedemptionUpdateRequest,
+    CouponUpdateRequest,
+    CreditPackageCreateRequest,
+    CreditPackageUpdateRequest,
+    DesignStructureCreateRequest,
     GenerateContentRequest,
     GenerateImageRequest,
     GenerationCreateRequest,
@@ -38,17 +55,45 @@ from creator.api.dtos import (
     ImageWorkflowDecisionRequest,
     ImageWorkflowRequest,
     ImproveContentRequest,
+    InvoiceCreateRequest,
+    InvoiceUpdateRequest,
+    NotificationCreateRequest,
+    NotificationPreferenceRequest,
+    NotificationUpdateRequest,
+    OrderCreateRequest,
+    OrderUpdateRequest,
+    PaymentMethodCreateRequest,
+    PaymentMethodUpdateRequest,
     PersonaCreateRequest,
+    PersonaUpdateRequest,
+    PlanCreateRequest,
+    PlanItemCreateRequest,
+    PlanItemUpdateRequest,
     PlanningCreateRequest,
+    PlanningUpdateRequest,
+    PlanUpdateRequest,
     PostStructureCreateRequest,
     PostStructureUpdateRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
+    ProviderCustomerCreateRequest,
+    ProviderDisputeCreateRequest,
+    ProviderDisputeUpdateRequest,
+    ProviderSubscriptionCreateRequest,
+    RefundCreateRequest,
+    RefundUpdateRequest,
     RegenerateImageRequest,
     SettingsUpdateRequest,
+    SubscriptionCreateRequest,
+    SubscriptionUpdateRequest,
     UserCreateRequest,
+    UserDeviceCreateRequest,
+    UserDeviceUpdateRequest,
     UserUpdateRequest,
     WorkspaceCreateRequest,
+    WorkspaceCreditTransactionCreateRequest,
+    WorkspaceInviteCreateRequest,
+    WorkspaceInviteUpdateRequest,
     WorkspaceUpdateRequest,
 )
 from creator.application.agent_image_workflow import (
@@ -143,6 +188,8 @@ OPENAPI_TAGS = [
     {"name": "Planning", "description": "Content planning endpoints."},
     {"name": "Post Structures", "description": "Post structure endpoints."},
     {"name": "Brand Assets", "description": "Brand asset endpoints."},
+    {"name": "Notifications", "description": "Principal notification settings and devices."},
+    {"name": "Billing", "description": "Billing plan administration endpoints."},
 ]
 
 
@@ -158,6 +205,11 @@ def _request_id(request: Request | None = None) -> UUID:
         request_id = uuid4()
     request.state.request_id = request_id
     return request_id
+
+
+def _require_global_billing_admin(user: UserRecord) -> None:
+    if user.global_role not in {"admin", "gestor"}:
+        raise HTTPException(status_code=403, detail="Billing administration required")
 
 
 def _json_response(
@@ -454,6 +506,461 @@ def _brand_asset_data(asset: Any) -> dict[str, Any]:
         "created_at": asset.created_at.isoformat(),
         "updated_at": asset.updated_at.isoformat(),
         "deleted_at": asset.deleted_at.isoformat() if asset.deleted_at else None,
+    }
+
+
+def _user_device_data(device: Any) -> dict[str, Any]:
+    return {
+        "id": str(device.id),
+        "user_id": str(device.user_id),
+        "platform": device.platform,
+        "fcm_token": device.fcm_token,
+        "is_active": device.is_active,
+        "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
+        "created_at": device.created_at.isoformat(),
+        "updated_at": device.updated_at.isoformat(),
+        "deleted_at": device.deleted_at.isoformat() if device.deleted_at else None,
+    }
+
+
+def _notification_preference_data(preference: Any) -> dict[str, Any]:
+    return {
+        "id": str(preference.id),
+        "user_id": str(preference.user_id),
+        "type": preference.type,
+        "channel": preference.channel,
+        "is_enabled": preference.is_enabled,
+        "created_at": preference.created_at.isoformat(),
+        "updated_at": preference.updated_at.isoformat(),
+        "deleted_at": preference.deleted_at.isoformat() if preference.deleted_at else None,
+    }
+
+
+def _notification_data(notification: Any) -> dict[str, Any]:
+    return {
+        "id": str(notification.id),
+        "workspace_id": str(notification.workspace_id),
+        "type": notification.type,
+        "title": notification.title,
+        "body": notification.body,
+        "payload": notification.payload,
+        "resource_type": notification.resource_type,
+        "resource_id": str(notification.resource_id) if notification.resource_id else None,
+        "created_by": str(notification.created_by) if notification.created_by else None,
+        "created_at": notification.created_at.isoformat(),
+        "updated_at": notification.updated_at.isoformat(),
+        "deleted_at": notification.deleted_at.isoformat() if notification.deleted_at else None,
+    }
+
+
+def _plan_data(plan: Any) -> dict[str, Any]:
+    return {
+        "id": str(plan.id),
+        "code": plan.code,
+        "type": plan.type,
+        "name": plan.name,
+        "description": plan.description,
+        "metadata": plan.metadata,
+        "is_active": plan.is_active,
+        "created_at": plan.created_at.isoformat(),
+        "updated_at": plan.updated_at.isoformat(),
+        "deleted_at": plan.deleted_at.isoformat() if plan.deleted_at else None,
+    }
+
+
+def _plan_item_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "plan_id": str(item.plan_id),
+        "name": item.name,
+        "description": item.description,
+        "quantity": item.quantity,
+        "cycles": item.cycles,
+        "pricing_scheme_type": item.pricing_scheme_type,
+        "price_cents": item.price_cents,
+        "price_brackets": item.price_brackets,
+        "status": item.status,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _billing_account_data(account: Any) -> dict[str, Any]:
+    return {
+        "id": str(account.id),
+        "user_id": str(account.user_id),
+        "payer_type": account.payer_type,
+        "name": account.name,
+        "email": account.email,
+        "phone": account.phone,
+        "document": account.document,
+        "document_type": account.document_type,
+        "company_name": account.company_name,
+        "provider": account.provider,
+        "provider_customer_id": account.provider_customer_id,
+        "provider_customer_code": account.provider_customer_code,
+        "delinquent": account.delinquent,
+        "metadata": account.metadata,
+        "created_at": account.created_at.isoformat(),
+        "updated_at": account.updated_at.isoformat(),
+        "deleted_at": account.deleted_at.isoformat() if account.deleted_at else None,
+    }
+
+
+def _billing_address_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "street": item.street,
+        "number": item.number,
+        "complement": item.complement,
+        "neighborhood": item.neighborhood,
+        "zip_code": item.zip_code,
+        "city": item.city,
+        "state": item.state,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _payment_method_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "holder_name": item.holder_name,
+        "holder_document": item.holder_document,
+        "card_brand": item.card_brand,
+        "card_last_four": item.card_last_four,
+        "exp_month": item.exp_month,
+        "exp_year": item.exp_year,
+        "card_type": item.card_type,
+        "card_status": item.card_status,
+        "is_default": item.is_default,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _subscription_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "workspace_id": str(item.workspace_id),
+        "plan_id": str(item.plan_id),
+        "status": item.status,
+        "payment_method": item.payment_method,
+        "billing_day": item.billing_day,
+        "start_at": item.start_at.isoformat() if item.start_at else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _invoice_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "subscription_id": str(item.subscription_id) if item.subscription_id else None,
+        "amount_cents": item.amount_cents,
+        "currency": item.currency,
+        "status": item.status,
+        "billing_at": item.billing_at.isoformat() if item.billing_at else None,
+        "due_at": item.due_at.isoformat() if item.due_at else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _charge_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "invoice_id": str(item.invoice_id) if item.invoice_id else None,
+        "amount_cents": item.amount_cents,
+        "currency": item.currency,
+        "status": item.status,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _coupon_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "code": item.code,
+        "type": item.type,
+        "discount_percent": item.discount_percent,
+        "credits_amount": item.credits_amount,
+        "applies_to": item.applies_to,
+        "min_purchase_cents": item.min_purchase_cents,
+        "max_redemptions": item.max_redemptions,
+        "once_per_workspace": item.once_per_workspace,
+        "redemptions_count": item.redemptions_count,
+        "expires_at": item.expires_at.isoformat() if item.expires_at else None,
+        "is_active": item.is_active,
+        "internal_note": item.internal_note,
+        "created_by": str(item.created_by) if item.created_by else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _credit_package_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "code": item.code,
+        "name": item.name,
+        "credits_amount": item.credits_amount,
+        "price_cents": item.price_cents,
+        "currency": item.currency,
+        "is_active": item.is_active,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _order_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "workspace_id": str(item.workspace_id),
+        "credit_package_id": str(item.credit_package_id) if item.credit_package_id else None,
+        "subtotal_cents": item.subtotal_cents,
+        "discount_cents": item.discount_cents,
+        "amount_cents": item.amount_cents,
+        "currency": item.currency,
+        "status": item.status,
+        "closed": item.closed,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _coupon_redemption_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "coupon_id": str(item.coupon_id),
+        "billing_account_id": str(item.billing_account_id),
+        "order_id": str(item.order_id) if item.order_id else None,
+        "subscription_id": str(item.subscription_id) if item.subscription_id else None,
+        "discount_percent_applied": item.discount_percent_applied,
+        "discount_amount_cents": item.discount_amount_cents,
+        "credits_applied": item.credits_applied,
+        "status": item.status,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _workspace_invite_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "workspace_id": str(item.workspace_id),
+        "type": item.type,
+        "role": item.role,
+        "email": item.email,
+        "max_uses": item.max_uses,
+        "uses_count": item.uses_count,
+        "status": item.status,
+        "is_active": item.is_active,
+        "created_by": str(item.created_by),
+        "expires_at": item.expires_at.isoformat() if item.expires_at else None,
+        "last_used_at": item.last_used_at.isoformat() if item.last_used_at else None,
+        "revoked_at": item.revoked_at.isoformat() if item.revoked_at else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _workspace_credit_transaction_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "workspace_id": str(item.workspace_id),
+        "amount": item.amount,
+        "transaction_type": item.transaction_type,
+        "reference_type": item.reference_type,
+        "reference_id": str(item.reference_id) if item.reference_id else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _refund_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "invoice_id": str(item.invoice_id) if item.invoice_id else None,
+        "amount_cents": item.amount_cents,
+        "currency": item.currency,
+        "reason": item.reason,
+        "status": item.status,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _provider_dispute_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "charge_id": str(item.charge_id) if item.charge_id else None,
+        "code": item.code,
+        "reason": item.reason,
+        "status": item.status,
+        "opened_at": item.opened_at.isoformat() if item.opened_at else None,
+        "deadline_at": item.deadline_at.isoformat() if item.deadline_at else None,
+        "payload": item.payload,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _provider_customer_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "billing_account_id": str(item.billing_account_id),
+        "provider": item.provider,
+        "provider_customer_id": item.provider_customer_id,
+        "provider_code": item.provider_code,
+        "metadata": item.metadata,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _provider_subscription_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "subscription_id": str(item.subscription_id),
+        "provider": item.provider,
+        "provider_subscription_id": item.provider_subscription_id,
+        "provider_status": item.provider_status,
+        "payload": item.payload,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _provider_webhook_event_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "provider": item.provider,
+        "provider_event_id": item.provider_event_id,
+        "dedupe_key": item.dedupe_key,
+        "event_type": item.event_type,
+        "account_id": item.account_id,
+        "resource_type": item.resource_type,
+        "resource_id": item.resource_id,
+        "payload": item.payload,
+        "signature_verified": item.signature_verified,
+        "status": item.status,
+        "attempts": item.attempts,
+        "last_error": item.last_error,
+        "received_at": item.received_at.isoformat(),
+        "processed_at": item.processed_at.isoformat() if item.processed_at else None,
+    }
+
+
+def _provider_idempotency_key_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "provider": item.provider,
+        "idempotency_key": item.idempotency_key,
+        "request_hash": item.request_hash,
+        "resource_type": item.resource_type,
+        "resource_id": item.resource_id,
+        "status": item.status,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _design_structure_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "post_structure_id": str(item.post_structure_id),
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _brand_color_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "brand_id": str(item.brand_id),
+        "workspace_id": str(item.workspace_id),
+        "created_by": str(item.created_by),
+        "order": item.order,
+        "color_name": item.color_name,
+        "hex_code": item.hex_code,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _subscription_history_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "subscription_id": str(item.subscription_id),
+        "change_type": item.change_type,
+        "previous_plan_id": str(item.previous_plan_id) if item.previous_plan_id else None,
+        "plan_id": str(item.plan_id) if item.plan_id else None,
+        "previous_status": item.previous_status,
+        "status": item.status,
+        "reason": item.reason,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _notification_recipient_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "notification_id": str(item.notification_id),
+        "user_id": str(item.user_id),
+        "workspace_member_id": str(item.workspace_member_id) if item.workspace_member_id else None,
+        "channel": item.channel,
+        "status": item.status,
+        "attempts": item.attempts,
+        "sent_at": item.sent_at.isoformat() if item.sent_at else None,
+        "read_at": item.read_at.isoformat() if item.read_at else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+    }
+
+
+def _workspace_invite_usage_data(item: Any) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "invite_id": str(item.invite_id),
+        "user_id": str(item.user_id),
+        "workspace_id": str(item.workspace_id),
+        "member_id": str(item.member_id) if item.member_id else None,
+        "used_at": item.used_at.isoformat(),
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
     }
 
 
@@ -1509,6 +2016,47 @@ def create_app() -> FastAPI:
             raise _not_found("Campaign")
         return success_response(_campaign_data(campaign), request)
 
+    @application.put("/api/v1/campaigns/{id}", tags=["Campaigns"])
+    def update_campaign(
+        campaign_id: Annotated[UUID, Path(alias="id")],
+        payload: CampaignUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.campaigns.get_for_user(
+            user_id=current_user.id, campaign_id=campaign_id
+        )
+        if existing is None:
+            raise _not_found("Campaign")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
+        )
+        updated = unit_of_work.campaigns.update(
+            campaign_id=campaign_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_campaign_data(updated), request)
+
+    @application.delete("/api/v1/campaigns/{id}", tags=["Campaigns"])
+    def delete_campaign(
+        campaign_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.campaigns.get_for_user(
+            user_id=current_user.id, campaign_id=campaign_id
+        )
+        if existing is None:
+            raise _not_found("Campaign")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
+        )
+        unit_of_work.campaigns.soft_delete(campaign_id=campaign_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
     @application.get("/api/v1/personas", tags=["Personas"])
     def list_personas(
         request: Request,
@@ -1545,6 +2093,69 @@ def create_app() -> FastAPI:
         )
         unit_of_work.commit()
         return success_response(_persona_data(persona), request, status_code=201)
+
+    @application.get("/api/v1/personas/{id}", tags=["Personas"])
+    def get_persona(
+        persona_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        persona = unit_of_work.personas.get_for_user(user_id=current_user.id, persona_id=persona_id)
+        if persona is None:
+            raise _not_found("Persona")
+        return success_response(_persona_data(persona), request)
+
+    @application.put("/api/v1/personas/{id}", tags=["Personas"])
+    def update_persona(
+        persona_id: Annotated[UUID, Path(alias="id")],
+        payload: PersonaUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.personas.get_for_user(
+            user_id=current_user.id, persona_id=persona_id
+        )
+        if existing is None:
+            raise _not_found("Persona")
+        brand = unit_of_work.brands.get_for_user(
+            user_id=current_user.id, brand_id=existing.brand_id
+        )
+        if brand is None:
+            raise _not_found("Persona")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=brand.workspace_id
+        )
+        updated = unit_of_work.personas.update(
+            persona_id=persona_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_persona_data(updated), request)
+
+    @application.delete("/api/v1/personas/{id}", tags=["Personas"])
+    def delete_persona(
+        persona_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.personas.get_for_user(
+            user_id=current_user.id, persona_id=persona_id
+        )
+        if existing is None:
+            raise _not_found("Persona")
+        brand = unit_of_work.brands.get_for_user(
+            user_id=current_user.id, brand_id=existing.brand_id
+        )
+        if brand is None:
+            raise _not_found("Persona")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=brand.workspace_id
+        )
+        unit_of_work.personas.soft_delete(persona_id=persona_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
 
     @application.get("/api/v1/planning", tags=["Planning"])
     def list_planning(
@@ -1584,6 +2195,71 @@ def create_app() -> FastAPI:
         )
         unit_of_work.commit()
         return success_response(_planning_data(planning), request, status_code=201)
+
+    @application.get("/api/v1/planning/{id}", tags=["Planning"])
+    def get_planning(
+        planning_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        planning = unit_of_work.planning.get_for_user(
+            user_id=current_user.id, planning_id=planning_id
+        )
+        if planning is None:
+            raise _not_found("Planning")
+        return success_response(_planning_data(planning), request)
+
+    @application.put("/api/v1/planning/{id}", tags=["Planning"])
+    def update_planning(
+        planning_id: Annotated[UUID, Path(alias="id")],
+        payload: PlanningUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.planning.get_for_user(
+            user_id=current_user.id, planning_id=planning_id
+        )
+        if existing is None:
+            raise _not_found("Planning")
+        campaign = unit_of_work.campaigns.get_for_user(
+            user_id=current_user.id, campaign_id=existing.campaign_id
+        )
+        if campaign is None:
+            raise _not_found("Planning")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=campaign.workspace_id
+        )
+        updated = unit_of_work.planning.update(
+            planning_id=planning_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_planning_data(updated), request)
+
+    @application.delete("/api/v1/planning/{id}", tags=["Planning"])
+    def delete_planning(
+        planning_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.planning.get_for_user(
+            user_id=current_user.id, planning_id=planning_id
+        )
+        if existing is None:
+            raise _not_found("Planning")
+        campaign = unit_of_work.campaigns.get_for_user(
+            user_id=current_user.id, campaign_id=existing.campaign_id
+        )
+        if campaign is None:
+            raise _not_found("Planning")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=campaign.workspace_id
+        )
+        unit_of_work.planning.soft_delete(planning_id=planning_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
 
     @application.get("/api/v1/post-structures", tags=["Post Structures"])
     def list_post_structures(
@@ -2111,6 +2787,2320 @@ def create_app() -> FastAPI:
         if asset is None:
             raise _not_found("Brand asset")
         return success_response(_brand_asset_data(asset), request)
+
+    @application.put("/api/v1/brand-assets/{id}", tags=["Brand Assets"])
+    def update_brand_asset(
+        asset_id: Annotated[UUID, Path(alias="id")],
+        payload: BrandAssetUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.brand_assets.get_for_user(
+            user_id=current_user.id, asset_id=asset_id
+        )
+        if existing is None:
+            raise _not_found("Brand asset")
+        brand = unit_of_work.brands.get_for_user(
+            user_id=current_user.id, brand_id=existing.brand_id
+        )
+        if brand is None:
+            raise _not_found("Brand asset")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=brand.workspace_id
+        )
+        updated = unit_of_work.brand_assets.update(
+            asset_id=asset_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_brand_asset_data(updated), request)
+
+    @application.delete("/api/v1/brand-assets/{id}", tags=["Brand Assets"])
+    def delete_brand_asset(
+        asset_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.brand_assets.get_for_user(
+            user_id=current_user.id, asset_id=asset_id
+        )
+        if existing is None:
+            raise _not_found("Brand asset")
+        brand = unit_of_work.brands.get_for_user(
+            user_id=current_user.id, brand_id=existing.brand_id
+        )
+        if brand is None:
+            raise _not_found("Brand asset")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=brand.workspace_id
+        )
+        unit_of_work.brand_assets.soft_delete(asset_id=asset_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/subscription-history", tags=["Billing"])
+    def list_subscription_history(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _subscription_history_data(x)
+                    for x in unit_of_work.subscription_history.list_for_user(
+                        user_id=current_user.id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/subscription-history", tags=["Billing"])
+    def create_subscription_history(
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        subscription_id = payload.get("subscription_id")
+        if (
+            subscription_id is None
+            or unit_of_work.subscriptions.get_for_user(
+                user_id=current_user.id, subscription_id=subscription_id
+            )
+            is None
+        ):
+            raise _not_found("Subscription")
+        item = unit_of_work.subscription_history.add(fields=payload)
+        unit_of_work.commit()
+        return success_response(_subscription_history_data(item), request, status_code=201)
+
+    @application.get("/api/v1/subscription-history/{id}", tags=["Billing"])
+    def get_subscription_history(
+        history_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.subscription_history.get_for_user(
+            user_id=current_user.id, history_id=history_id
+        )
+        if item is None:
+            raise _not_found("Subscription history")
+        return success_response(_subscription_history_data(item), request)
+
+    @application.put("/api/v1/subscription-history/{id}", tags=["Billing"])
+    def update_subscription_history(
+        history_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.subscription_history.get_for_user(
+                user_id=current_user.id, history_id=history_id
+            )
+            is None
+        ):
+            raise _not_found("Subscription history")
+        item = unit_of_work.subscription_history.update(history_id=history_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_subscription_history_data(item), request)
+
+    @application.delete("/api/v1/subscription-history/{id}", tags=["Billing"])
+    def delete_subscription_history(
+        history_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.subscription_history.get_for_user(
+                user_id=current_user.id, history_id=history_id
+            )
+            is None
+        ):
+            raise _not_found("Subscription history")
+        unit_of_work.subscription_history.soft_delete(history_id=history_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/brand-colors", tags=["Brands"])
+    def list_brand_colors(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        brand_id: UUID | None = None,
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _brand_color_data(x)
+                    for x in unit_of_work.brand_colors.list_for_user(
+                        user_id=current_user.id, brand_id=brand_id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/brand-colors", tags=["Brands"])
+    def create_brand_color(
+        payload: BrandColorCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        data = payload.model_dump()
+        data["created_by"] = current_user.id
+        item = unit_of_work.brand_colors.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_brand_color_data(item), request, status_code=201)
+
+    @application.get("/api/v1/brand-colors/{id}", tags=["Brands"])
+    def get_brand_color(
+        color_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.brand_colors.get_for_user(user_id=current_user.id, color_id=color_id)
+        if item is None:
+            raise _not_found("Brand color")
+        return success_response(_brand_color_data(item), request)
+
+    @application.put("/api/v1/brand-colors/{id}", tags=["Brands"])
+    def update_brand_color(
+        color_id: Annotated[UUID, Path(alias="id")],
+        payload: BrandColorUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.brand_colors.get_for_user(user_id=current_user.id, color_id=color_id)
+            is None
+        ):
+            raise _not_found("Brand color")
+        item = unit_of_work.brand_colors.update(
+            color_id=color_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_brand_color_data(item), request)
+
+    @application.delete("/api/v1/brand-colors/{id}", tags=["Brands"])
+    def delete_brand_color(
+        color_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.brand_colors.get_for_user(user_id=current_user.id, color_id=color_id)
+            is None
+        ):
+            raise _not_found("Brand color")
+        unit_of_work.brand_colors.soft_delete(color_id=color_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/design-structures", tags=["Post Structures"])
+    def list_design_structures(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _design_structure_data(x)
+                    for x in unit_of_work.design_structures.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/design-structures", tags=["Post Structures"])
+    def create_design_structure(
+        payload: DesignStructureCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.post_structures.get_for_user(
+            user_id=current_user.id, post_structure_id=payload.post_structure_id
+        )
+        if item is None:
+            raise _not_found("Post structure")
+        result = unit_of_work.design_structures.add(post_structure_id=payload.post_structure_id)
+        unit_of_work.commit()
+        return success_response(_design_structure_data(result), request, status_code=201)
+
+    @application.get("/api/v1/design-structures/{id}", tags=["Post Structures"])
+    def get_design_structure(
+        design_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.design_structures.get_for_user(
+            user_id=current_user.id, design_id=design_id
+        )
+        if item is None:
+            raise _not_found("Design structure")
+        return success_response(_design_structure_data(item), request)
+
+    @application.put("/api/v1/design-structures/{id}", tags=["Post Structures"])
+    def update_design_structure(
+        design_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.design_structures.get_for_user(
+                user_id=current_user.id, design_id=design_id
+            )
+            is None
+        ):
+            raise _not_found("Design structure")
+        item = unit_of_work.design_structures.update(design_id=design_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_design_structure_data(item), request)
+
+    @application.delete("/api/v1/design-structures/{id}", tags=["Post Structures"])
+    def delete_design_structure(
+        design_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.design_structures.get_for_user(
+                user_id=current_user.id, design_id=design_id
+            )
+            is None
+        ):
+            raise _not_found("Design structure")
+        unit_of_work.design_structures.soft_delete(design_id=design_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/workspace-credit-transactions", tags=["Workspaces"])
+    def list_workspace_credit_transactions(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        workspace_id: UUID | None = None,
+    ) -> JSONResponse:
+        items = unit_of_work.workspace_credit_transactions.list_for_user(
+            user_id=current_user.id, workspace_id=workspace_id
+        )
+        return success_response(
+            {"items": [_workspace_credit_transaction_data(x) for x in items]}, request
+        )
+
+    @application.post("/api/v1/workspace-credit-transactions", tags=["Workspaces"])
+    def create_workspace_credit_transaction(
+        payload: WorkspaceCreditTransactionCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        item = unit_of_work.workspace_credit_transactions.add(fields=payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_workspace_credit_transaction_data(item), request, status_code=201)
+
+    @application.get("/api/v1/workspace-credit-transactions/{id}", tags=["Workspaces"])
+    def get_workspace_credit_transaction(
+        transaction_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.workspace_credit_transactions.get_for_user(
+            user_id=current_user.id, transaction_id=transaction_id
+        )
+        if item is None:
+            raise _not_found("Workspace credit transaction")
+        return success_response(_workspace_credit_transaction_data(item), request)
+
+    @application.delete("/api/v1/workspace-credit-transactions/{id}", tags=["Workspaces"])
+    def delete_workspace_credit_transaction(
+        transaction_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.workspace_credit_transactions.get_for_user(
+                user_id=current_user.id, transaction_id=transaction_id
+            )
+            is None
+        ):
+            raise _not_found("Workspace credit transaction")
+        unit_of_work.workspace_credit_transactions.soft_delete(transaction_id=transaction_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/workspace-invites", tags=["Workspaces"])
+    def list_workspace_invites(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        workspace_id: UUID | None = None,
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _workspace_invite_data(x)
+                    for x in unit_of_work.workspace_invites.list_for_user(
+                        user_id=current_user.id, workspace_id=workspace_id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/workspace-invites", tags=["Workspaces"])
+    def create_workspace_invite(
+        payload: WorkspaceInviteCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        item = unit_of_work.workspace_invites.add(
+            **payload.model_dump(), created_by=current_user.id, token=uuid4().hex
+        )
+        unit_of_work.commit()
+        return success_response(_workspace_invite_data(item), request, status_code=201)
+
+    @application.get("/api/v1/workspace-invites/{id}", tags=["Workspaces"])
+    def get_workspace_invite(
+        invite_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.workspace_invites.get_for_user(
+            user_id=current_user.id, invite_id=invite_id
+        )
+        if item is None:
+            raise _not_found("Workspace invite")
+        return success_response(_workspace_invite_data(item), request)
+
+    @application.put("/api/v1/workspace-invites/{id}", tags=["Workspaces"])
+    def update_workspace_invite(
+        invite_id: Annotated[UUID, Path(alias="id")],
+        payload: WorkspaceInviteUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.workspace_invites.get_for_user(
+                user_id=current_user.id, invite_id=invite_id
+            )
+            is None
+        ):
+            raise _not_found("Workspace invite")
+        item = unit_of_work.workspace_invites.update(
+            invite_id=invite_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_workspace_invite_data(item), request)
+
+    @application.delete("/api/v1/workspace-invites/{id}", tags=["Workspaces"])
+    def delete_workspace_invite(
+        invite_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.workspace_invites.get_for_user(
+                user_id=current_user.id, invite_id=invite_id
+            )
+            is None
+        ):
+            raise _not_found("Workspace invite")
+        unit_of_work.workspace_invites.soft_delete(invite_id=invite_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/billing-addresses", tags=["Billing"])
+    def list_billing_addresses(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        billing_account_id: UUID | None = None,
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _billing_address_data(x)
+                    for x in unit_of_work.billing_addresses.list_for_user(
+                        user_id=current_user.id, account_id=billing_account_id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/billing-addresses", tags=["Billing"])
+    def create_billing_address(
+        payload: BillingAddressCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        data = payload.model_dump()
+        account_id = data.pop("billing_account_id")
+        item = unit_of_work.billing_addresses.add(billing_account_id=account_id, fields=data)
+        unit_of_work.commit()
+        return success_response(_billing_address_data(item), request, status_code=201)
+
+    @application.get("/api/v1/billing-addresses/{id}", tags=["Billing"])
+    def get_billing_address(
+        address_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.billing_addresses.get_for_user(
+            user_id=current_user.id, address_id=address_id
+        )
+        if item is None:
+            raise _not_found("Billing address")
+        return success_response(_billing_address_data(item), request)
+
+    @application.put("/api/v1/billing-addresses/{id}", tags=["Billing"])
+    def update_billing_address(
+        address_id: Annotated[UUID, Path(alias="id")],
+        payload: BillingAddressUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_addresses.get_for_user(
+                user_id=current_user.id, address_id=address_id
+            )
+            is None
+        ):
+            raise _not_found("Billing address")
+        item = unit_of_work.billing_addresses.update(
+            address_id=address_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_billing_address_data(item), request)
+
+    @application.delete("/api/v1/billing-addresses/{id}", tags=["Billing"])
+    def delete_billing_address(
+        address_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_addresses.get_for_user(
+                user_id=current_user.id, address_id=address_id
+            )
+            is None
+        ):
+            raise _not_found("Billing address")
+        unit_of_work.billing_addresses.soft_delete(address_id=address_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/billing-payment-methods", tags=["Billing"])
+    def list_payment_methods(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        billing_account_id: UUID | None = None,
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _payment_method_data(x)
+                    for x in unit_of_work.billing_payment_methods.list_for_user(
+                        user_id=current_user.id, account_id=billing_account_id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/billing-payment-methods", tags=["Billing"])
+    def create_payment_method(
+        payload: PaymentMethodCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        data = payload.model_dump()
+        account_id = data.pop("billing_account_id")
+        item = unit_of_work.billing_payment_methods.add(billing_account_id=account_id, fields=data)
+        unit_of_work.commit()
+        return success_response(_payment_method_data(item), request, status_code=201)
+
+    @application.get("/api/v1/billing-payment-methods/{id}", tags=["Billing"])
+    def get_payment_method(
+        method_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.billing_payment_methods.get_for_user(
+            user_id=current_user.id, method_id=method_id
+        )
+        if item is None:
+            raise _not_found("Billing payment method")
+        return success_response(_payment_method_data(item), request)
+
+    @application.put("/api/v1/billing-payment-methods/{id}", tags=["Billing"])
+    def update_payment_method(
+        method_id: Annotated[UUID, Path(alias="id")],
+        payload: PaymentMethodUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_payment_methods.get_for_user(
+                user_id=current_user.id, method_id=method_id
+            )
+            is None
+        ):
+            raise _not_found("Billing payment method")
+        item = unit_of_work.billing_payment_methods.update(
+            method_id=method_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_payment_method_data(item), request)
+
+    @application.delete("/api/v1/billing-payment-methods/{id}", tags=["Billing"])
+    def delete_payment_method(
+        method_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_payment_methods.get_for_user(
+                user_id=current_user.id, method_id=method_id
+            )
+            is None
+        ):
+            raise _not_found("Billing payment method")
+        unit_of_work.billing_payment_methods.soft_delete(method_id=method_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/billing-accounts", tags=["Billing"])
+    def list_billing_accounts(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        items = unit_of_work.billing_accounts.list_for_user(user_id=current_user.id)
+        return success_response({"items": [_billing_account_data(item) for item in items]}, request)
+
+    @application.post("/api/v1/billing-accounts", tags=["Billing"])
+    def create_billing_account(
+        payload: BillingAccountCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if payload.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403, detail="Billing account belongs to another Principal"
+            )
+        item = unit_of_work.billing_accounts.add(
+            user_id=current_user.id,
+            payer_type=payload.payer_type,
+            name=payload.name,
+            email=payload.email,
+            phone=payload.phone,
+            document=payload.document,
+            document_type=payload.document_type,
+        )
+        unit_of_work.commit()
+        return success_response(_billing_account_data(item), request, status_code=201)
+
+    @application.get("/api/v1/billing-accounts/{id}", tags=["Billing"])
+    def get_billing_account(
+        account_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.billing_accounts.get_for_user(
+            user_id=current_user.id, account_id=account_id
+        )
+        if item is None:
+            raise _not_found("Billing account")
+        return success_response(_billing_account_data(item), request)
+
+    @application.put("/api/v1/billing-accounts/{id}", tags=["Billing"])
+    def update_billing_account(
+        account_id: Annotated[UUID, Path(alias="id")],
+        payload: BillingAccountUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        item = unit_of_work.billing_accounts.update(
+            user_id=current_user.id,
+            account_id=account_id,
+            fields=payload.model_dump(exclude_unset=True),
+        )
+        unit_of_work.commit()
+        return success_response(_billing_account_data(item), request)
+
+    @application.delete("/api/v1/billing-accounts/{id}", tags=["Billing"])
+    def delete_billing_account(
+        account_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        unit_of_work.billing_accounts.soft_delete(user_id=current_user.id, account_id=account_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/subscriptions", tags=["Billing"])
+    def list_subscriptions(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _subscription_data(x)
+                    for x in unit_of_work.subscriptions.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/subscriptions", tags=["Billing"])
+    def create_subscription(
+        payload: SubscriptionCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        if unit_of_work.plans.get(plan_id=payload.plan_id) is None:
+            raise _not_found("Plan")
+        item = unit_of_work.subscriptions.add(**payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_subscription_data(item), request, status_code=201)
+
+    @application.get("/api/v1/subscriptions/{id}", tags=["Billing"])
+    def get_subscription(
+        subscription_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.subscriptions.get_for_user(
+            user_id=current_user.id, subscription_id=subscription_id
+        )
+        if item is None:
+            raise _not_found("Subscription")
+        return success_response(_subscription_data(item), request)
+
+    @application.put("/api/v1/subscriptions/{id}", tags=["Billing"])
+    def update_subscription(
+        subscription_id: Annotated[UUID, Path(alias="id")],
+        payload: SubscriptionUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.subscriptions.get_for_user(
+                user_id=current_user.id, subscription_id=subscription_id
+            )
+            is None
+        ):
+            raise _not_found("Subscription")
+        item = unit_of_work.subscriptions.update(
+            subscription_id=subscription_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_subscription_data(item), request)
+
+    @application.delete("/api/v1/subscriptions/{id}", tags=["Billing"])
+    def delete_subscription(
+        subscription_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.subscriptions.get_for_user(
+                user_id=current_user.id, subscription_id=subscription_id
+            )
+            is None
+        ):
+            raise _not_found("Subscription")
+        unit_of_work.subscriptions.soft_delete(subscription_id=subscription_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/invoices", tags=["Billing"])
+    def list_invoices(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _invoice_data(x)
+                    for x in unit_of_work.invoices.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/invoices", tags=["Billing"])
+    def create_invoice(
+        payload: InvoiceCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        item = unit_of_work.invoices.add(**payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_invoice_data(item), request, status_code=201)
+
+    @application.get("/api/v1/invoices/{id}", tags=["Billing"])
+    def get_invoice(
+        invoice_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.invoices.get_for_user(user_id=current_user.id, invoice_id=invoice_id)
+        if item is None:
+            raise _not_found("Invoice")
+        return success_response(_invoice_data(item), request)
+
+    @application.put("/api/v1/invoices/{id}", tags=["Billing"])
+    def update_invoice(
+        invoice_id: Annotated[UUID, Path(alias="id")],
+        payload: InvoiceUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.invoices.get_for_user(user_id=current_user.id, invoice_id=invoice_id)
+            is None
+        ):
+            raise _not_found("Invoice")
+        item = unit_of_work.invoices.update(
+            invoice_id=invoice_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_invoice_data(item), request)
+
+    @application.delete("/api/v1/invoices/{id}", tags=["Billing"])
+    def delete_invoice(
+        invoice_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.invoices.get_for_user(user_id=current_user.id, invoice_id=invoice_id)
+            is None
+        ):
+            raise _not_found("Invoice")
+        unit_of_work.invoices.soft_delete(invoice_id=invoice_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/charges", tags=["Billing"])
+    def list_charges(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _charge_data(x)
+                    for x in unit_of_work.charges.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/charges", tags=["Billing"])
+    def create_charge(
+        payload: ChargeCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        item = unit_of_work.charges.add(**payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_charge_data(item), request, status_code=201)
+
+    @application.get("/api/v1/charges/{id}", tags=["Billing"])
+    def get_charge(
+        charge_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.charges.get_for_user(user_id=current_user.id, charge_id=charge_id)
+        if item is None:
+            raise _not_found("Charge")
+        return success_response(_charge_data(item), request)
+
+    @application.put("/api/v1/charges/{id}", tags=["Billing"])
+    def update_charge(
+        charge_id: Annotated[UUID, Path(alias="id")],
+        payload: ChargeUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if unit_of_work.charges.get_for_user(user_id=current_user.id, charge_id=charge_id) is None:
+            raise _not_found("Charge")
+        item = unit_of_work.charges.update(
+            charge_id=charge_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_charge_data(item), request)
+
+    @application.delete("/api/v1/charges/{id}", tags=["Billing"])
+    def delete_charge(
+        charge_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if unit_of_work.charges.get_for_user(user_id=current_user.id, charge_id=charge_id) is None:
+            raise _not_found("Charge")
+        unit_of_work.charges.soft_delete(charge_id=charge_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/orders", tags=["Billing"])
+    def list_orders(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _order_data(x)
+                    for x in unit_of_work.orders.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/orders", tags=["Billing"])
+    def create_order(
+        payload: OrderCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        data = payload.model_dump()
+        data["status"] = "pending"
+        item = unit_of_work.orders.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_order_data(item), request, status_code=201)
+
+    @application.get("/api/v1/orders/{id}", tags=["Billing"])
+    def get_order(
+        order_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.orders.get_for_user(user_id=current_user.id, order_id=order_id)
+        if item is None:
+            raise _not_found("Order")
+        return success_response(_order_data(item), request)
+
+    @application.put("/api/v1/orders/{id}", tags=["Billing"])
+    def update_order(
+        order_id: Annotated[UUID, Path(alias="id")],
+        payload: OrderUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if unit_of_work.orders.get_for_user(user_id=current_user.id, order_id=order_id) is None:
+            raise _not_found("Order")
+        item = unit_of_work.orders.update(
+            order_id=order_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_order_data(item), request)
+
+    @application.delete("/api/v1/orders/{id}", tags=["Billing"])
+    def delete_order(
+        order_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if unit_of_work.orders.get_for_user(user_id=current_user.id, order_id=order_id) is None:
+            raise _not_found("Order")
+        unit_of_work.orders.soft_delete(order_id=order_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/coupon-redemptions", tags=["Billing"])
+    def list_coupon_redemptions(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _coupon_redemption_data(x)
+                    for x in unit_of_work.coupon_redemptions.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/coupon-redemptions", tags=["Billing"])
+    def create_coupon_redemption(
+        payload: CouponRedemptionCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        data = payload.model_dump()
+        data["status"] = "applied"
+        item = unit_of_work.coupon_redemptions.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_coupon_redemption_data(item), request, status_code=201)
+
+    @application.get("/api/v1/coupon-redemptions/{id}", tags=["Billing"])
+    def get_coupon_redemption(
+        redemption_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.coupon_redemptions.get_for_user(
+            user_id=current_user.id, redemption_id=redemption_id
+        )
+        if item is None:
+            raise _not_found("Coupon redemption")
+        return success_response(_coupon_redemption_data(item), request)
+
+    @application.put("/api/v1/coupon-redemptions/{id}", tags=["Billing"])
+    def update_coupon_redemption(
+        redemption_id: Annotated[UUID, Path(alias="id")],
+        payload: CouponRedemptionUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.coupon_redemptions.get_for_user(
+                user_id=current_user.id, redemption_id=redemption_id
+            )
+            is None
+        ):
+            raise _not_found("Coupon redemption")
+        item = unit_of_work.coupon_redemptions.update(
+            redemption_id=redemption_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_coupon_redemption_data(item), request)
+
+    @application.delete("/api/v1/coupon-redemptions/{id}", tags=["Billing"])
+    def delete_coupon_redemption(
+        redemption_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.coupon_redemptions.get_for_user(
+                user_id=current_user.id, redemption_id=redemption_id
+            )
+            is None
+        ):
+            raise _not_found("Coupon redemption")
+        unit_of_work.coupon_redemptions.soft_delete(redemption_id=redemption_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/provider-customers", tags=["Billing"])
+    def list_provider_customers(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _provider_customer_data(x)
+                    for x in unit_of_work.provider_customers.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/provider-customers", tags=["Billing"])
+    def create_provider_customer(
+        payload: ProviderCustomerCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        data = payload.model_dump()
+        data["metadata_json"] = data.pop("metadata")
+        item = unit_of_work.provider_customers.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_provider_customer_data(item), request, status_code=201)
+
+    @application.get("/api/v1/provider-customers/{id}", tags=["Billing"])
+    def get_provider_customer(
+        record_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.provider_customers.get_for_user(
+            user_id=current_user.id, record_id=record_id
+        )
+        if item is None:
+            raise _not_found("Provider customer")
+        return success_response(_provider_customer_data(item), request)
+
+    @application.delete("/api/v1/provider-customers/{id}", tags=["Billing"])
+    def delete_provider_customer(
+        record_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.provider_customers.get_for_user(
+                user_id=current_user.id, record_id=record_id
+            )
+            is None
+        ):
+            raise _not_found("Provider customer")
+        unit_of_work.provider_customers.soft_delete(record_id=record_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.put("/api/v1/provider-customers/{id}", tags=["Billing"])
+    def update_provider_customer(
+        record_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.provider_customers.get_for_user(
+                user_id=current_user.id, record_id=record_id
+            )
+            is None
+        ):
+            raise _not_found("Provider customer")
+        item = unit_of_work.provider_customers.update(record_id=record_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_provider_customer_data(item), request)
+
+    @application.get("/api/v1/provider-subscriptions", tags=["Billing"])
+    def list_provider_subscriptions(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _provider_subscription_data(x)
+                    for x in unit_of_work.provider_subscriptions.list_for_user(
+                        user_id=current_user.id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/provider-subscriptions", tags=["Billing"])
+    def create_provider_subscription(
+        payload: ProviderSubscriptionCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.subscriptions.get_for_user(
+                user_id=current_user.id, subscription_id=payload.subscription_id
+            )
+            is None
+        ):
+            raise _not_found("Subscription")
+        data = payload.model_dump()
+        data["payload"] = data.pop("payload")
+        item = unit_of_work.provider_subscriptions.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_provider_subscription_data(item), request, status_code=201)
+
+    @application.get("/api/v1/provider-subscriptions/{id}", tags=["Billing"])
+    def get_provider_subscription(
+        record_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.provider_subscriptions.get_for_user(
+            user_id=current_user.id, record_id=record_id
+        )
+        if item is None:
+            raise _not_found("Provider subscription")
+        return success_response(_provider_subscription_data(item), request)
+
+    @application.delete("/api/v1/provider-subscriptions/{id}", tags=["Billing"])
+    def delete_provider_subscription(
+        record_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.provider_subscriptions.get_for_user(
+                user_id=current_user.id, record_id=record_id
+            )
+            is None
+        ):
+            raise _not_found("Provider subscription")
+        unit_of_work.provider_subscriptions.soft_delete(record_id=record_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/provider-webhook-events", tags=["Billing"])
+    def list_provider_webhook_events(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        return success_response(
+            {
+                "items": [
+                    _provider_webhook_event_data(x)
+                    for x in unit_of_work.provider_webhook_events.list()
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/provider-webhook-events", tags=["Billing"])
+    def create_provider_webhook_event(
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.provider_webhook_events.add(fields=payload)
+        unit_of_work.commit()
+        return success_response(_provider_webhook_event_data(item), request, status_code=201)
+
+    @application.get("/api/v1/provider-webhook-events/{id}", tags=["Billing"])
+    def get_provider_webhook_event(
+        event_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.provider_webhook_events.get(event_id=event_id)
+        if item is None:
+            raise _not_found("Provider webhook event")
+        return success_response(_provider_webhook_event_data(item), request)
+
+    @application.put("/api/v1/provider-webhook-events/{id}", tags=["Billing"])
+    def update_provider_webhook_event(
+        event_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.provider_webhook_events.get(event_id=event_id) is None:
+            raise _not_found("Provider webhook event")
+        item = unit_of_work.provider_webhook_events.update(event_id=event_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_provider_webhook_event_data(item), request)
+
+    @application.delete("/api/v1/provider-webhook-events/{id}", tags=["Billing"])
+    def delete_provider_webhook_event(
+        event_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.provider_webhook_events.get(event_id=event_id)
+        if item is None:
+            raise _not_found("Provider webhook event")
+        updated = unit_of_work.provider_webhook_events.update(
+            event_id=event_id, fields={"status": "deleted"}
+        )
+        unit_of_work.commit()
+        return success_response(_provider_webhook_event_data(updated), request)
+
+    @application.get("/api/v1/provider-idempotency-keys", tags=["Billing"])
+    def list_provider_idempotency_keys(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        return success_response(
+            {
+                "items": [
+                    _provider_idempotency_key_data(x)
+                    for x in unit_of_work.provider_idempotency_keys.list()
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/provider-idempotency-keys", tags=["Billing"])
+    def create_provider_idempotency_key(
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.provider_idempotency_keys.add(fields=payload)
+        unit_of_work.commit()
+        return success_response(_provider_idempotency_key_data(item), request, status_code=201)
+
+    @application.get("/api/v1/provider-idempotency-keys/{id}", tags=["Billing"])
+    def get_provider_idempotency_key(
+        key_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.provider_idempotency_keys.get(key_id=key_id)
+        if item is None:
+            raise _not_found("Provider idempotency key")
+        return success_response(_provider_idempotency_key_data(item), request)
+
+    @application.put("/api/v1/provider-idempotency-keys/{id}", tags=["Billing"])
+    def update_provider_idempotency_key(
+        key_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.provider_idempotency_keys.get(key_id=key_id) is None:
+            raise _not_found("Provider idempotency key")
+        item = unit_of_work.provider_idempotency_keys.update(key_id=key_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_provider_idempotency_key_data(item), request)
+
+    @application.delete("/api/v1/provider-idempotency-keys/{id}", tags=["Billing"])
+    def delete_provider_idempotency_key(
+        key_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.provider_idempotency_keys.get(key_id=key_id) is None:
+            raise _not_found("Provider idempotency key")
+        item = unit_of_work.provider_idempotency_keys.update(
+            key_id=key_id, fields={"status": "deleted"}
+        )
+        unit_of_work.commit()
+        return success_response(_provider_idempotency_key_data(item), request)
+
+    @application.put("/api/v1/provider-subscriptions/{id}", tags=["Billing"])
+    def update_provider_subscription(
+        record_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.provider_subscriptions.get_for_user(
+                user_id=current_user.id, record_id=record_id
+            )
+            is None
+        ):
+            raise _not_found("Provider subscription")
+        item = unit_of_work.provider_subscriptions.update(record_id=record_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_provider_subscription_data(item), request)
+
+    @application.get("/api/v1/refunds", tags=["Billing"])
+    def list_refunds(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _refund_data(x)
+                    for x in unit_of_work.refunds.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/refunds", tags=["Billing"])
+    def create_refund(
+        payload: RefundCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        data = payload.model_dump()
+        data["status"] = "pending"
+        item = unit_of_work.refunds.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_refund_data(item), request, status_code=201)
+
+    @application.get("/api/v1/refunds/{id}", tags=["Billing"])
+    def get_refund(
+        refund_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.refunds.get_for_user(user_id=current_user.id, refund_id=refund_id)
+        if item is None:
+            raise _not_found("Refund")
+        return success_response(_refund_data(item), request)
+
+    @application.put("/api/v1/refunds/{id}", tags=["Billing"])
+    def update_refund(
+        refund_id: Annotated[UUID, Path(alias="id")],
+        payload: RefundUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if unit_of_work.refunds.get_for_user(user_id=current_user.id, refund_id=refund_id) is None:
+            raise _not_found("Refund")
+        item = unit_of_work.refunds.update(
+            refund_id=refund_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_refund_data(item), request)
+
+    @application.delete("/api/v1/refunds/{id}", tags=["Billing"])
+    def delete_refund(
+        refund_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if unit_of_work.refunds.get_for_user(user_id=current_user.id, refund_id=refund_id) is None:
+            raise _not_found("Refund")
+        unit_of_work.refunds.soft_delete(refund_id=refund_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/provider-disputes", tags=["Billing"])
+    def list_provider_disputes(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _provider_dispute_data(x)
+                    for x in unit_of_work.provider_disputes.list_for_user(user_id=current_user.id)
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/provider-disputes", tags=["Billing"])
+    def create_provider_dispute(
+        payload: ProviderDisputeCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.billing_accounts.get_for_user(
+                user_id=current_user.id, account_id=payload.billing_account_id
+            )
+            is None
+        ):
+            raise _not_found("Billing account")
+        data = payload.model_dump()
+        data["status"] = "open"
+        data["payload"] = {}
+        item = unit_of_work.provider_disputes.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_provider_dispute_data(item), request, status_code=201)
+
+    @application.get("/api/v1/provider-disputes/{id}", tags=["Billing"])
+    def get_provider_dispute(
+        dispute_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.provider_disputes.get_for_user(
+            user_id=current_user.id, dispute_id=dispute_id
+        )
+        if item is None:
+            raise _not_found("Provider dispute")
+        return success_response(_provider_dispute_data(item), request)
+
+    @application.put("/api/v1/provider-disputes/{id}", tags=["Billing"])
+    def update_provider_dispute(
+        dispute_id: Annotated[UUID, Path(alias="id")],
+        payload: ProviderDisputeUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.provider_disputes.get_for_user(
+                user_id=current_user.id, dispute_id=dispute_id
+            )
+            is None
+        ):
+            raise _not_found("Provider dispute")
+        item = unit_of_work.provider_disputes.update(
+            dispute_id=dispute_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_provider_dispute_data(item), request)
+
+    @application.delete("/api/v1/provider-disputes/{id}", tags=["Billing"])
+    def delete_provider_dispute(
+        dispute_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.provider_disputes.get_for_user(
+                user_id=current_user.id, dispute_id=dispute_id
+            )
+            is None
+        ):
+            raise _not_found("Provider dispute")
+        unit_of_work.provider_disputes.soft_delete(dispute_id=dispute_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/coupons", tags=["Billing"])
+    def list_coupons(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        return success_response(
+            {"items": [_coupon_data(x) for x in unit_of_work.coupons.list()]}, request
+        )
+
+    @application.post("/api/v1/coupons", tags=["Billing"])
+    def create_coupon(
+        payload: CouponCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        data = payload.model_dump()
+        data["created_by"] = current_user.id
+        item = unit_of_work.coupons.add(fields=data)
+        unit_of_work.commit()
+        return success_response(_coupon_data(item), request, status_code=201)
+
+    @application.get("/api/v1/coupons/{id}", tags=["Billing"])
+    def get_coupon(
+        coupon_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.coupons.get(coupon_id=coupon_id)
+        if item is None:
+            raise _not_found("Coupon")
+        return success_response(_coupon_data(item), request)
+
+    @application.put("/api/v1/coupons/{id}", tags=["Billing"])
+    def update_coupon(
+        coupon_id: Annotated[UUID, Path(alias="id")],
+        payload: CouponUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.coupons.get(coupon_id=coupon_id) is None:
+            raise _not_found("Coupon")
+        item = unit_of_work.coupons.update(
+            coupon_id=coupon_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_coupon_data(item), request)
+
+    @application.delete("/api/v1/coupons/{id}", tags=["Billing"])
+    def delete_coupon(
+        coupon_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.coupons.get(coupon_id=coupon_id) is None:
+            raise _not_found("Coupon")
+        unit_of_work.coupons.soft_delete(coupon_id=coupon_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/credit-packages", tags=["Billing"])
+    def list_credit_packages(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        return success_response(
+            {"items": [_credit_package_data(x) for x in unit_of_work.credit_packages.list()]},
+            request,
+        )
+
+    @application.post("/api/v1/credit-packages", tags=["Billing"])
+    def create_credit_package(
+        payload: CreditPackageCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.credit_packages.add(fields=payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_credit_package_data(item), request, status_code=201)
+
+    @application.get("/api/v1/credit-packages/{id}", tags=["Billing"])
+    def get_credit_package(
+        package_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.credit_packages.get(package_id=package_id)
+        if item is None:
+            raise _not_found("Credit package")
+        return success_response(_credit_package_data(item), request)
+
+    @application.put("/api/v1/credit-packages/{id}", tags=["Billing"])
+    def update_credit_package(
+        package_id: Annotated[UUID, Path(alias="id")],
+        payload: CreditPackageUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.credit_packages.get(package_id=package_id) is None:
+            raise _not_found("Credit package")
+        item = unit_of_work.credit_packages.update(
+            package_id=package_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_credit_package_data(item), request)
+
+    @application.delete("/api/v1/credit-packages/{id}", tags=["Billing"])
+    def delete_credit_package(
+        package_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.credit_packages.get(package_id=package_id) is None:
+            raise _not_found("Credit package")
+        unit_of_work.credit_packages.soft_delete(package_id=package_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/plans", tags=["Billing"])
+    def list_plans(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        return success_response(
+            {"items": [_plan_data(item) for item in unit_of_work.plans.list()]}, request
+        )
+
+    @application.post("/api/v1/plans", tags=["Billing"])
+    def create_plan(
+        payload: PlanCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.plans.add(**payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_plan_data(item), request, status_code=201)
+
+    @application.get("/api/v1/plans/{id}", tags=["Billing"])
+    def get_plan(
+        plan_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.plans.get(plan_id=plan_id)
+        if item is None:
+            raise _not_found("Plan")
+        return success_response(_plan_data(item), request)
+
+    @application.put("/api/v1/plans/{id}", tags=["Billing"])
+    def update_plan(
+        plan_id: Annotated[UUID, Path(alias="id")],
+        payload: PlanUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.plans.get(plan_id=plan_id) is None:
+            raise _not_found("Plan")
+        item = unit_of_work.plans.update(
+            plan_id=plan_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_plan_data(item), request)
+
+    @application.delete("/api/v1/plans/{id}", tags=["Billing"])
+    def delete_plan(
+        plan_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.plans.get(plan_id=plan_id) is None:
+            raise _not_found("Plan")
+        unit_of_work.plans.soft_delete(plan_id=plan_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/plan-items", tags=["Billing"])
+    def list_plan_items(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        plan_id: UUID | None = None,
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        items = unit_of_work.plan_items.list(plan_id=plan_id)
+        return success_response({"items": [_plan_item_data(item) for item in items]}, request)
+
+    @application.post("/api/v1/plan-items", tags=["Billing"])
+    def create_plan_item(
+        payload: PlanItemCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.plans.get(plan_id=payload.plan_id) is None:
+            raise _not_found("Plan")
+        item = unit_of_work.plan_items.add(**payload.model_dump())
+        unit_of_work.commit()
+        return success_response(_plan_item_data(item), request, status_code=201)
+
+    @application.get("/api/v1/plan-items/{id}", tags=["Billing"])
+    def get_plan_item(
+        item_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        item = unit_of_work.plan_items.get(item_id=item_id)
+        if item is None:
+            raise _not_found("Plan item")
+        return success_response(_plan_item_data(item), request)
+
+    @application.put("/api/v1/plan-items/{id}", tags=["Billing"])
+    def update_plan_item(
+        item_id: Annotated[UUID, Path(alias="id")],
+        payload: PlanItemUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.plan_items.get(item_id=item_id) is None:
+            raise _not_found("Plan item")
+        item = unit_of_work.plan_items.update(
+            item_id=item_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_plan_item_data(item), request)
+
+    @application.delete("/api/v1/plan-items/{id}", tags=["Billing"])
+    def delete_plan_item(
+        item_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_global_billing_admin(current_user)
+        if unit_of_work.plan_items.get(item_id=item_id) is None:
+            raise _not_found("Plan item")
+        unit_of_work.plan_items.soft_delete(item_id=item_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/notification-recipients", tags=["Notifications"])
+    def list_notification_recipients(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _notification_recipient_data(x)
+                    for x in unit_of_work.notification_recipients.list_for_user(
+                        user_id=current_user.id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/notification-recipients", tags=["Notifications"])
+    def create_notification_recipient(
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        payload["user_id"] = current_user.id
+        item = unit_of_work.notification_recipients.add(fields=payload)
+        unit_of_work.commit()
+        return success_response(_notification_recipient_data(item), request, status_code=201)
+
+    @application.get("/api/v1/notification-recipients/{id}", tags=["Notifications"])
+    def get_notification_recipient(
+        recipient_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.notification_recipients.get_for_user(
+            user_id=current_user.id, recipient_id=recipient_id
+        )
+        if item is None:
+            raise _not_found("Notification recipient")
+        return success_response(_notification_recipient_data(item), request)
+
+    @application.put("/api/v1/notification-recipients/{id}", tags=["Notifications"])
+    def update_notification_recipient(
+        recipient_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.notification_recipients.get_for_user(
+                user_id=current_user.id, recipient_id=recipient_id
+            )
+            is None
+        ):
+            raise _not_found("Notification recipient")
+        item = unit_of_work.notification_recipients.update(
+            recipient_id=recipient_id, fields=payload
+        )
+        unit_of_work.commit()
+        return success_response(_notification_recipient_data(item), request)
+
+    @application.delete("/api/v1/notification-recipients/{id}", tags=["Notifications"])
+    def delete_notification_recipient(
+        recipient_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.notification_recipients.get_for_user(
+                user_id=current_user.id, recipient_id=recipient_id
+            )
+            is None
+        ):
+            raise _not_found("Notification recipient")
+        unit_of_work.notification_recipients.soft_delete(recipient_id=recipient_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/workspace-invite-usages", tags=["Workspaces"])
+    def list_workspace_invite_usages(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        workspace_id: UUID | None = None,
+    ) -> JSONResponse:
+        return success_response(
+            {
+                "items": [
+                    _workspace_invite_usage_data(x)
+                    for x in unit_of_work.workspace_invite_usages.list_for_user(
+                        user_id=current_user.id, workspace_id=workspace_id
+                    )
+                ]
+            },
+            request,
+        )
+
+    @application.post("/api/v1/workspace-invite-usages", tags=["Workspaces"])
+    def create_workspace_invite_usage(
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        payload["user_id"] = current_user.id
+        item = unit_of_work.workspace_invite_usages.add(fields=payload)
+        unit_of_work.commit()
+        return success_response(_workspace_invite_usage_data(item), request, status_code=201)
+
+    @application.get("/api/v1/workspace-invite-usages/{id}", tags=["Workspaces"])
+    def get_workspace_invite_usage(
+        usage_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.workspace_invite_usages.get_for_user(
+            user_id=current_user.id, usage_id=usage_id
+        )
+        if item is None:
+            raise _not_found("Workspace invite usage")
+        return success_response(_workspace_invite_usage_data(item), request)
+
+    @application.put("/api/v1/workspace-invite-usages/{id}", tags=["Workspaces"])
+    def update_workspace_invite_usage(
+        usage_id: Annotated[UUID, Path(alias="id")],
+        payload: dict[str, Any],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.workspace_invite_usages.get_for_user(
+                user_id=current_user.id, usage_id=usage_id
+            )
+            is None
+        ):
+            raise _not_found("Workspace invite usage")
+        item = unit_of_work.workspace_invite_usages.update(usage_id=usage_id, fields=payload)
+        unit_of_work.commit()
+        return success_response(_workspace_invite_usage_data(item), request)
+
+    @application.delete("/api/v1/workspace-invite-usages/{id}", tags=["Workspaces"])
+    def delete_workspace_invite_usage(
+        usage_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.workspace_invite_usages.get_for_user(
+                user_id=current_user.id, usage_id=usage_id
+            )
+            is None
+        ):
+            raise _not_found("Workspace invite usage")
+        unit_of_work.workspace_invite_usages.soft_delete(usage_id=usage_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/notifications", tags=["Notifications"])
+    def list_notifications(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+        workspace_id: UUID | None = None,
+    ) -> JSONResponse:
+        items = unit_of_work.notifications.list_for_user(
+            user_id=current_user.id, workspace_id=workspace_id
+        )
+        return success_response({"items": [_notification_data(item) for item in items]}, request)
+
+    @application.post("/api/v1/notifications", tags=["Notifications"])
+    def create_notification(
+        payload: NotificationCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=payload.workspace_id
+        )
+        item = unit_of_work.notifications.add(
+            workspace_id=payload.workspace_id,
+            created_by=current_user.id,
+            type=payload.type,
+            title=payload.title,
+            body=payload.body,
+            payload=payload.payload,
+            resource_type=payload.resource_type,
+            resource_id=payload.resource_id,
+        )
+        unit_of_work.commit()
+        return success_response(_notification_data(item), request, status_code=201)
+
+    @application.get("/api/v1/notifications/{id}", tags=["Notifications"])
+    def get_notification(
+        notification_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.notifications.get_for_user(
+            user_id=current_user.id, notification_id=notification_id
+        )
+        if item is None:
+            raise _not_found("Notification")
+        return success_response(_notification_data(item), request)
+
+    @application.put("/api/v1/notifications/{id}", tags=["Notifications"])
+    def update_notification(
+        notification_id: Annotated[UUID, Path(alias="id")],
+        payload: NotificationUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.notifications.get_for_user(
+            user_id=current_user.id, notification_id=notification_id
+        )
+        if existing is None:
+            raise _not_found("Notification")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
+        )
+        item = unit_of_work.notifications.update(
+            notification_id=notification_id, fields=payload.model_dump(exclude_unset=True)
+        )
+        unit_of_work.commit()
+        return success_response(_notification_data(item), request)
+
+    @application.delete("/api/v1/notifications/{id}", tags=["Notifications"])
+    def delete_notification(
+        notification_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        existing = unit_of_work.notifications.get_for_user(
+            user_id=current_user.id, notification_id=notification_id
+        )
+        if existing is None:
+            raise _not_found("Notification")
+        _require_workspace_write(
+            unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
+        )
+        unit_of_work.notifications.soft_delete(notification_id=notification_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/user-devices", tags=["Notifications"])
+    def list_user_devices(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        items = unit_of_work.user_devices.list_for_user(user_id=current_user.id)
+        return success_response({"items": [_user_device_data(item) for item in items]}, request)
+
+    @application.post("/api/v1/user-devices", tags=["Notifications"])
+    def create_user_device(
+        payload: UserDeviceCreateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.user_devices.add(
+            user_id=current_user.id, platform=payload.platform, fcm_token=payload.fcm_token
+        )
+        unit_of_work.commit()
+        return success_response(_user_device_data(item), request, status_code=201)
+
+    @application.get("/api/v1/user-devices/{id}", tags=["Notifications"])
+    def get_user_device(
+        device_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.user_devices.get_for_user(user_id=current_user.id, device_id=device_id)
+        if item is None:
+            raise _not_found("User device")
+        return success_response(_user_device_data(item), request)
+
+    @application.put("/api/v1/user-devices/{id}", tags=["Notifications"])
+    def update_user_device(
+        device_id: Annotated[UUID, Path(alias="id")],
+        payload: UserDeviceUpdateRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.user_devices.get_for_user(user_id=current_user.id, device_id=device_id)
+            is None
+        ):
+            raise _not_found("User device")
+        item = unit_of_work.user_devices.update(
+            user_id=current_user.id,
+            device_id=device_id,
+            fields=payload.model_dump(exclude_unset=True),
+        )
+        unit_of_work.commit()
+        return success_response(_user_device_data(item), request)
+
+    @application.delete("/api/v1/user-devices/{id}", tags=["Notifications"])
+    def delete_user_device(
+        device_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.user_devices.get_for_user(user_id=current_user.id, device_id=device_id)
+            is None
+        ):
+            raise _not_found("User device")
+        unit_of_work.user_devices.soft_delete(user_id=current_user.id, device_id=device_id)
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
+
+    @application.get("/api/v1/notification-preferences", tags=["Notifications"])
+    def list_notification_preferences(
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        items = unit_of_work.notification_preferences.list_for_user(user_id=current_user.id)
+        return success_response(
+            {"items": [_notification_preference_data(item) for item in items]}, request
+        )
+
+    @application.post("/api/v1/notification-preferences", tags=["Notifications"])
+    def create_notification_preference(
+        payload: NotificationPreferenceRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.notification_preferences.add(
+            user_id=current_user.id,
+            type=payload.type,
+            channel=payload.channel,
+            is_enabled=payload.is_enabled,
+        )
+        unit_of_work.commit()
+        return success_response(_notification_preference_data(item), request, status_code=201)
+
+    @application.get("/api/v1/notification-preferences/{id}", tags=["Notifications"])
+    def get_notification_preference(
+        preference_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        item = unit_of_work.notification_preferences.get_for_user(
+            user_id=current_user.id, preference_id=preference_id
+        )
+        if item is None:
+            raise _not_found("Notification preference")
+        return success_response(_notification_preference_data(item), request)
+
+    @application.put("/api/v1/notification-preferences/{id}", tags=["Notifications"])
+    def update_notification_preference(
+        preference_id: Annotated[UUID, Path(alias="id")],
+        payload: NotificationPreferenceRequest,
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.notification_preferences.get_for_user(
+                user_id=current_user.id, preference_id=preference_id
+            )
+            is None
+        ):
+            raise _not_found("Notification preference")
+        item = unit_of_work.notification_preferences.update(
+            user_id=current_user.id,
+            preference_id=preference_id,
+            fields=payload.model_dump(exclude_unset=True),
+        )
+        unit_of_work.commit()
+        return success_response(_notification_preference_data(item), request)
+
+    @application.delete("/api/v1/notification-preferences/{id}", tags=["Notifications"])
+    def delete_notification_preference(
+        preference_id: Annotated[UUID, Path(alias="id")],
+        request: Request,
+        current_user: Annotated[UserRecord, Depends(get_current_user)],
+        unit_of_work: Annotated[UnitOfWork, Depends(get_uow)],
+    ) -> JSONResponse:
+        if (
+            unit_of_work.notification_preferences.get_for_user(
+                user_id=current_user.id, preference_id=preference_id
+            )
+            is None
+        ):
+            raise _not_found("Notification preference")
+        unit_of_work.notification_preferences.soft_delete(
+            user_id=current_user.id, preference_id=preference_id
+        )
+        unit_of_work.commit()
+        return success_response({"deleted": True}, request)
 
     @application.get("/api/v1/generated-images/{id}", tags=["Images"])
     def get_generated_image(

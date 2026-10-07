@@ -26,9 +26,15 @@ def upgrade() -> None:
         "REJECTED",
         "FAILED",
         name="agent_workflow_status",
+        create_type=False,
     )
     agent_workflow_step_status = sa.Enum(
-        "PENDING", "RUNNING", "COMPLETED", "FAILED", name="agent_workflow_step_status"
+        "PENDING",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED",
+        name="agent_workflow_step_status",
+        create_type=False,
     )
     agent_workflow_step_role = sa.Enum(
         "BUSINESS",
@@ -38,8 +44,9 @@ def upgrade() -> None:
         "REVIEWER",
         "DELIVERY",
         name="agent_workflow_step_role",
+        create_type=False,
     )
-    human_review_mode = sa.Enum("AUTO", "OPTIONAL", name="human_review_mode")
+    human_review_mode = sa.Enum("AUTO", "OPTIONAL", name="human_review_mode", create_type=False)
     bind = op.get_bind()
     agent_workflow_status.create(bind, checkfirst=True)
     agent_workflow_step_status.create(bind, checkfirst=True)
@@ -97,6 +104,11 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["requested_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "id",
+            "workspace_id",
+            name="uq_agent_workflow_runs_id_workspace",
+        ),
         sa.UniqueConstraint(
             "workspace_id",
             "idempotency_key",

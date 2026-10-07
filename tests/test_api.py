@@ -2333,6 +2333,8 @@ def test_swagger_operations_are_grouped_by_domain() -> None:
         "Planning",
         "Post Structures",
         "Brand Assets",
+        "Notifications",
+        "Billing",
     ]
 
     prefixes = {
@@ -2342,7 +2344,12 @@ def test_swagger_operations_are_grouped_by_domain() -> None:
         "/api/v1/users": "Users",
         "/api/v1/settings": "Settings",
         "/api/v1/workspaces": "Workspaces",
+        "/api/v1/workspace-invites": "Workspaces",
+        "/api/v1/workspace-credit-transactions": "Workspaces",
+        "/api/v1/workspace-invite-usages": "Workspaces",
         "/api/v1/brands": "Brands",
+        "/api/v1/brand-colors": "Brands",
+        "/api/v1/subscription-history": "Billing",
         "/api/v1/projects": "Projects",
         "/api/v1/content": "Contents",
         "/api/v1/contents": "Contents",
@@ -2353,14 +2360,65 @@ def test_swagger_operations_are_grouped_by_domain() -> None:
         "/api/v1/personas": "Personas",
         "/api/v1/planning": "Planning",
         "/api/v1/post-structures": "Post Structures",
+        "/api/v1/design-structures": "Post Structures",
         "/api/v1/brand-assets": "Brand Assets",
         "/api/v1/generated-images": "Images",
+        "/api/v1/user-devices": "Notifications",
+        "/api/v1/notification-preferences": "Notifications",
+        "/api/v1/notification-recipients": "Notifications",
+        "/api/v1/notifications": "Notifications",
+        "/api/v1/plans": "Billing",
+        "/api/v1/plan-items": "Billing",
+        "/api/v1/billing-accounts": "Billing",
+        "/api/v1/billing-addresses": "Billing",
+        "/api/v1/billing-payment-methods": "Billing",
+        "/api/v1/subscriptions": "Billing",
+        "/api/v1/invoices": "Billing",
+        "/api/v1/charges": "Billing",
+        "/api/v1/coupons": "Billing",
+        "/api/v1/credit-packages": "Billing",
+        "/api/v1/orders": "Billing",
+        "/api/v1/coupon-redemptions": "Billing",
+        "/api/v1/refunds": "Billing",
+        "/api/v1/provider-disputes": "Billing",
+        "/api/v1/provider-customers": "Billing",
+        "/api/v1/provider-subscriptions": "Billing",
+        "/api/v1/provider-webhook-events": "Billing",
+        "/api/v1/provider-idempotency-keys": "Billing",
     }
     for path, path_item in schema["paths"].items():
         expected_tag = next(tag for prefix, tag in prefixes.items() if path.startswith(prefix))
         for method, operation in path_item.items():
             if method in {"get", "post", "put", "patch", "delete"}:
                 assert operation["tags"] == [expected_tag], (method, path)
+
+
+def test_marketing_crud_routes_are_documented() -> None:
+    paths = app.openapi()["paths"]
+    for path in (
+        "/api/v1/campaigns/{id}",
+        "/api/v1/personas/{id}",
+        "/api/v1/planning/{id}",
+        "/api/v1/brand-assets/{id}",
+    ):
+        assert {"get", "put", "delete"} <= set(paths[path])
+
+
+def test_billing_and_workspace_invite_crud_routes_are_documented() -> None:
+    paths = app.openapi()["paths"]
+    for path in (
+        "/api/v1/plan-items",
+        "/api/v1/plan-items/{id}",
+        "/api/v1/subscriptions",
+        "/api/v1/subscriptions/{id}",
+        "/api/v1/invoices",
+        "/api/v1/invoices/{id}",
+        "/api/v1/charges",
+        "/api/v1/charges/{id}",
+        "/api/v1/workspace-invites",
+        "/api/v1/workspace-invites/{id}",
+    ):
+        assert path in paths
 
 
 @pytest.mark.anyio

@@ -3,6 +3,39 @@ from creator.repositories.agent_workflows import (
     AgentWorkflowRunRecord,
     AgentWorkflowStepRecord,
 )
+from creator.repositories.billing import (
+    BillingAccountRecord,
+    BillingAccountRepository,
+    BillingAddressRecord,
+    BillingAddressRepository,
+    BillingPaymentMethodRecord,
+    BillingPaymentMethodRepository,
+    ChargeRecord,
+    ChargeRepository,
+    InvoiceRecord,
+    InvoiceRepository,
+    PlanItemRecord,
+    PlanItemRepository,
+    PlanRecord,
+    PlanRepository,
+    SubscriptionRecord,
+    SubscriptionRepository,
+)
+from creator.repositories.brand_color import BrandColorRecord, BrandColorRepository
+from creator.repositories.catalog import (
+    CouponRecord,
+    CouponRepository,
+    CreditPackageRecord,
+    CreditPackageRepository,
+)
+from creator.repositories.commerce import (
+    CouponRedemptionRecord,
+    CouponRedemptionRepository,
+    OrderRecord,
+    OrderRepository,
+    WorkspaceCreditTransactionRecord,
+    WorkspaceCreditTransactionRepository,
+)
 from creator.repositories.common import JsonObject, Page, PageRequest, SortDirection
 from creator.repositories.content import (
     ContentDetailRecord,
@@ -23,6 +56,7 @@ from creator.repositories.core import (
     ProjectRecord,
     ProjectRepository,
 )
+from creator.repositories.design import DesignStructureRecord, DesignStructureRepository
 from creator.repositories.image_generation import (
     GenerationHistoryFilters,
     GenerationJobRecord,
@@ -33,7 +67,39 @@ from creator.repositories.image_generation import (
     ImageMetadata,
     ImageRecord,
 )
+from creator.repositories.invite_usage import (
+    WorkspaceInviteUsageRecord,
+    WorkspaceInviteUsageRepository,
+)
+from creator.repositories.notifications import (
+    NotificationPreferenceRecord,
+    NotificationPreferenceRepository,
+    NotificationRecipientRecord,
+    NotificationRecipientRepository,
+    NotificationRecord,
+    NotificationRepository,
+    UserDeviceRecord,
+    UserDeviceRepository,
+)
 from creator.repositories.outbox import OutboxEventRecord, OutboxRepository
+from creator.repositories.provider import (
+    ProviderDisputeRecord,
+    ProviderDisputeRepository,
+    RefundRecord,
+    RefundRepository,
+)
+from creator.repositories.provider_audit import (
+    ProviderIdempotencyKeyRecord,
+    ProviderIdempotencyKeyRepository,
+    ProviderWebhookEventRecord,
+    ProviderWebhookEventRepository,
+)
+from creator.repositories.provider_sync import (
+    ProviderCustomerRecord,
+    ProviderCustomerRepository,
+    ProviderSubscriptionRecord,
+    ProviderSubscriptionRepository,
+)
 from creator.repositories.schema import (
     BrandAssetRecord,
     BrandAssetRepository,
@@ -49,9 +115,15 @@ from creator.repositories.schema import (
     PostStructureRepository,
 )
 from creator.repositories.settings import SettingsRecord, SettingsRepository
+from creator.repositories.subscription_history import (
+    SubscriptionHistoryRecord,
+    SubscriptionHistoryRepository,
+)
 from creator.repositories.user import UserRecord, UserRepository
 from creator.repositories.workspace import (
     CreatedWorkspaceRecord,
+    WorkspaceInviteRecord,
+    WorkspaceInviteRepository,
     WorkspaceMembershipRecord,
     WorkspaceRecord,
     WorkspaceRepository,
@@ -65,6 +137,60 @@ __all__ = [
     "AgentWorkflowStepRecord",
     "OutboxEventRecord",
     "OutboxRepository",
+    "NotificationPreferenceRecord",
+    "NotificationPreferenceRepository",
+    "NotificationRecipientRecord",
+    "NotificationRecipientRepository",
+    "NotificationRecord",
+    "NotificationRepository",
+    "PlanRecord",
+    "PlanItemRecord",
+    "PlanItemRepository",
+    "PlanRepository",
+    "BillingAccountRecord",
+    "BillingAccountRepository",
+    "BillingAddressRecord",
+    "BillingAddressRepository",
+    "BillingPaymentMethodRecord",
+    "BillingPaymentMethodRepository",
+    "CouponRecord",
+    "CouponRepository",
+    "CreditPackageRecord",
+    "CreditPackageRepository",
+    "CouponRedemptionRecord",
+    "CouponRedemptionRepository",
+    "OrderRecord",
+    "OrderRepository",
+    "WorkspaceCreditTransactionRecord",
+    "WorkspaceCreditTransactionRepository",
+    "ProviderDisputeRecord",
+    "ProviderDisputeRepository",
+    "ProviderCustomerRecord",
+    "ProviderCustomerRepository",
+    "ProviderSubscriptionRecord",
+    "ProviderSubscriptionRepository",
+    "ProviderIdempotencyKeyRecord",
+    "ProviderIdempotencyKeyRepository",
+    "ProviderWebhookEventRecord",
+    "ProviderWebhookEventRepository",
+    "DesignStructureRecord",
+    "DesignStructureRepository",
+    "BrandColorRecord",
+    "BrandColorRepository",
+    "SubscriptionHistoryRecord",
+    "SubscriptionHistoryRepository",
+    "WorkspaceInviteUsageRecord",
+    "WorkspaceInviteUsageRepository",
+    "RefundRecord",
+    "RefundRepository",
+    "ChargeRecord",
+    "ChargeRepository",
+    "InvoiceRecord",
+    "InvoiceRepository",
+    "SubscriptionRecord",
+    "SubscriptionRepository",
+    "UserDeviceRecord",
+    "UserDeviceRepository",
     "BrandRecord",
     "BrandAssetRecord",
     "BrandAssetRepository",
@@ -108,6 +234,8 @@ __all__ = [
     "UserRecord",
     "UserRepository",
     "WorkspaceMembershipRecord",
+    "WorkspaceInviteRecord",
+    "WorkspaceInviteRepository",
     "WorkspaceRecord",
     "WorkspaceRepository",
 ]
