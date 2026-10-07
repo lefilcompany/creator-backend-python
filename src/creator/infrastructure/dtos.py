@@ -2315,7 +2315,7 @@ class SqlAlchemyImageGenerationRepository:
             ),
         )
 
-    def _scoped_job_count(self, user_id: UUID) -> Select[tuple[int]]:
+    def _scoped_job_count(self, user_id: UUID) -> Select[Any]:
         return (
             select(func.count())
             .select_from(models.GenerationJob)
