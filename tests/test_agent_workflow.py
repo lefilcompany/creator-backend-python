@@ -24,6 +24,7 @@ from creator.domain.agent_workflow import (
     HumanReviewMode,
     WorkflowDecision,
     can_transition_agent_workflow,
+    can_transition_agent_workflow_step,
 )
 from creator.repositories import (
     AgentWorkflowRunRecord,
@@ -159,6 +160,18 @@ def test_agent_workflow_transitions_are_explicit() -> None:
     )
     assert not can_transition_agent_workflow(
         AgentWorkflowStatus.COMPLETED, AgentWorkflowStatus.RUNNING
+    )
+
+
+def test_agent_workflow_step_transitions_are_explicit() -> None:
+    assert can_transition_agent_workflow_step(
+        AgentWorkflowStepStatus.RUNNING, AgentWorkflowStepStatus.COMPLETED
+    )
+    assert can_transition_agent_workflow_step(
+        AgentWorkflowStepStatus.RUNNING, AgentWorkflowStepStatus.FAILED
+    )
+    assert not can_transition_agent_workflow_step(
+        AgentWorkflowStepStatus.COMPLETED, AgentWorkflowStepStatus.RUNNING
     )
 
 
@@ -499,7 +512,15 @@ def test_worker_runs_specialists_and_finishes(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(worker, "SqlAlchemyUnitOfWork", WorkerUow)
     monkeypatch.setattr(worker, "get_settings", lambda: Settings(gemini_api_key=None))
-    monkeypatch.setattr(worker, "create_llm_provider", lambda settings: WorkflowLLM())
+    monkeypatch.setattr(
+        worker,
+        "create_multi_agent_orchestrator",
+        lambda settings: SimpleNamespace(
+            execute=lambda context, output_model: StructuredAgentRunner(WorkflowLLM()).run(
+                context, output_model
+            )
+        ),
+    )
     monkeypatch.setattr(worker, "create_image_reviewer", lambda settings: Reviewer())
     monkeypatch.setattr(
         worker,
@@ -547,7 +568,15 @@ def test_worker_stage_checkpoints_resume_from_persisted_outputs(
     WorkerUow.shared_repo = repo
     monkeypatch.setattr(worker, "SqlAlchemyUnitOfWork", WorkerUow)
     monkeypatch.setattr(worker, "get_settings", lambda: Settings(gemini_api_key=None))
-    monkeypatch.setattr(worker, "create_llm_provider", lambda settings: WorkflowLLM())
+    monkeypatch.setattr(
+        worker,
+        "create_multi_agent_orchestrator",
+        lambda settings: SimpleNamespace(
+            execute=lambda context, output_model: StructuredAgentRunner(WorkflowLLM()).run(
+                context, output_model
+            )
+        ),
+    )
     monkeypatch.setattr(
         worker,
         "create_semantic_retriever",

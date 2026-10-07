@@ -22,11 +22,15 @@ Criar Brand Knowledge por Brand e Workspace para ingestão, chunking, embeddings
 
 ## Critérios de aceite
 
-- [ ] Migration Alembic reversível e modelos SQLAlchemy implementados.
-- [ ] Ownership de Workspace/Brand, tipo de embedding e metadata documentados.
-- [ ] Unicidade e índices cobrem ingestão, reprocessamento e recuperação.
-- [ ] Testes cobrem isolamento, Soft Delete/cascatas e ordenação de chunks.
+- [x] Migration Alembic reversível e modelos SQLAlchemy implementados (`0017_brand_knowledge`).
+- [x] Ownership de Workspace/Brand, tipo de embedding e metadata documentados: FK composta impede mistura de Brand/Workspace; embeddings são arrays JSONB provider-neutral, metadata é objeto JSONB e chunks aceitam de 1 a 100.000 caracteres.
+- [x] Unicidade e índices cobrem ingestão, reprocessamento e recuperação (`document_id + chunk_index` e filtros por Workspace/Brand).
+- [x] Testes de modelo cobrem constraints, isolamento estrutural, Soft Delete/cascatas e ordenação de chunks.
 - [ ] Se houver API, `docs/openapi.yaml` é atualizado antes da implementação.
+
+## Implementação
+
+Não há API nesta entrega. A persistência fica disponível para a futura ingestão e recuperação sem importar SDK de Provider. Documentos usam Soft Delete; chunks são removidos em cascata com o documento e preservam a ordenação por `chunk_index`.
 
 ## Dependências
 

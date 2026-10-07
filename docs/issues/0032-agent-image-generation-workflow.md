@@ -20,6 +20,8 @@ Implementar o workflow assíncrono `Business → Planner → Writer → Artist �
 
 ## Linked implementation issues
 
+- [x] Worker conectado à boundary `MultiAgentOrchestrator` via factory; CrewAI permanece confinado ao adapter.
+
 - [`0033-agent-workflow-persistence`](0033-agent-workflow-persistence.md)
 - [`0034-specialist-agent-contracts`](0034-specialist-agent-contracts.md)
 - [`0035-multimodal-image-reviewer`](0035-multimodal-image-reviewer.md)

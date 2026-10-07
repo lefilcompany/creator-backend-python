@@ -45,6 +45,12 @@ class AgentWorkflowRun(Base):
             name="uq_agent_workflow_runs_workspace_idempotency_key",
         ),
         ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.id"],
+            name="fk_agent_workflow_runs_workspace",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
             ["content_id", "workspace_id"],
             ["contents.id", "contents.workspace_id"],
             name="fk_agent_workflow_runs_content_workspace",

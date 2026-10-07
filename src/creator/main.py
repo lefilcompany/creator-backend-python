@@ -2484,6 +2484,7 @@ def create_app() -> FastAPI:
         try:
             content = unit_of_work.contents.update(
                 content_id,
+                user_id=current_user.id,
                 brand_id=payload.brand_id,
                 project_id=payload.project_id,
                 title=payload.title,
@@ -2527,7 +2528,7 @@ def create_app() -> FastAPI:
             unit_of_work, user_id=current_user.id, workspace_id=existing.workspace_id
         )
         try:
-            unit_of_work.contents.soft_delete(content_id)
+            unit_of_work.contents.soft_delete(user_id=current_user.id, content_id=content_id)
         except EntityNotFoundError as error:
             raise _not_found("Content") from error
         unit_of_work.commit()

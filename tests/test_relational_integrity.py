@@ -15,6 +15,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
+from creator.domain.exceptions import EntityNotFoundError
 from creator.domain.generation import GenerationJobStatus
 from creator.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from creator.repositories import GenerationHistoryFilters, ImageMetadata, PageRequest
@@ -449,6 +450,52 @@ def test_content_repository_scopes_pagination_by_user_membership(
     assert page.total == 2
     assert len(page.items) == 1
     assert page.items[0].workspace_id == ids["workspace_id"]
+
+
+def test_content_mutations_and_image_generation_hide_other_users_resources(
+    migrated_engine: Engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        owner = seed_user_workspace_content(connection)
+        other = seed_user_workspace_content(connection)
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        with pytest.raises(EntityNotFoundError):
+            unit_of_work.contents.update(
+                owner["content_id"], user_id=other["user_id"], title="stolen"
+            )
+        with pytest.raises(EntityNotFoundError):
+            unit_of_work.contents.soft_delete(
+                user_id=other["user_id"], content_id=owner["content_id"]
+            )
+        with pytest.raises(EntityNotFoundError):
+            unit_of_work.image_generations.create_image_generation(
+                workspace_id=owner["workspace_id"],
+                content_id=owner["content_id"],
+                requested_by_user_id=other["user_id"],
+                model="gemini-image",
+                prompt="unauthorized",
+            )
+        unit_of_work.rollback()
+
+
+def test_generation_cannot_reference_content_from_another_workspace(
+    migrated_engine: Engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        owner = seed_user_workspace_content(connection)
+        other = seed_user_workspace_content(connection)
+
+    with uow_for_engine(migrated_engine) as unit_of_work:
+        with pytest.raises(EntityNotFoundError):
+            unit_of_work.generations.add(
+                workspace_id=other["workspace_id"],
+                content_id=owner["content_id"],
+                requested_by_user_id=other["user_id"],
+                model="gemini-text",
+                prompt="cross-workspace",
+            )
+        unit_of_work.rollback()
 
 
 def test_content_repository_creates_text_content_and_generation(

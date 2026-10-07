@@ -80,6 +80,11 @@ def run_image_generation(job_id: str, request_id: str | None = None) -> None:
         )
     except StorageError:
         duration_ms = int((time.perf_counter() - started_at) * 1000)
+        # Storage validation/configuration failures are not transient.  The
+        # persistence layer handles upload failures when it can recover an
+        # already-uploaded object; every other storage failure must still
+        # terminally settle the Generation Job.
+        _fail_job(parsed_job_id, "STORAGE_UPLOAD_FAILED")
         _log(
             "image_generation_failed",
             request_id=parsed_request_id,
@@ -113,16 +118,10 @@ def run_image_generation(job_id: str, request_id: str | None = None) -> None:
         )
     except Exception:
         duration_ms = int((time.perf_counter() - started_at) * 1000)
-        if work_item.job.attempt_count < work_item.job.max_attempts:
-            _log(
-                "image_generation_retryable_failure",
-                request_id=parsed_request_id,
-                job_id=parsed_job_id,
-                attempt=work_item.job.attempt_count,
-                duration_ms=duration_ms,
-                failure_code="IMAGE_GENERATION_FAILED",
-            )
-            raise
+        # Only provider errors explicitly classified as retryable are raised
+        # above.  Unknown application errors are permanent from the queue's
+        # perspective: retrying them can duplicate side effects and hides a
+        # programming/configuration defect behind RQ retries.
         _fail_job(parsed_job_id, "IMAGE_GENERATION_FAILED")
         _log(
             "image_generation_failed",
@@ -132,7 +131,6 @@ def run_image_generation(job_id: str, request_id: str | None = None) -> None:
             duration_ms=duration_ms,
             failure_code="IMAGE_GENERATION_FAILED",
         )
-        raise
 
 
 def recover_stale_processing_jobs() -> int:

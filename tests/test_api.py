@@ -219,7 +219,7 @@ class FakeContentRepository:
         self.updated.append({"content_id": content_id, **kwargs})
         return content_record(content_id)
 
-    def soft_delete(self, content_id: UUID) -> None:
+    def soft_delete(self, *, user_id: UUID, content_id: UUID) -> None:
         if self.content is not None and self.content.deleted_at is not None:
             return
         self.deleted.append(content_id)

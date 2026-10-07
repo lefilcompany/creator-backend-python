@@ -24,14 +24,14 @@ Criar carteira, transações append-only e preços configuráveis, com débito a
 
 ## Critérios de aceite
 
-- [ ] Migration Alembic reversível e modelos SQLAlchemy implementados.
-- [ ] Há no máximo uma wallet ativa por Workspace e o saldo é transacional.
-- [ ] Débito, crédito, estorno e idempotência estão documentados.
+- [x] Migration Alembic reversível e modelos SQLAlchemy implementados.
+- [x] Há no máximo uma wallet ativa por Workspace e o saldo é transacional.
+- [x] Débito, crédito, estorno e idempotência estão documentados em ADR-019.
 - [ ] Transactions são auditáveis e não podem ser alteradas silenciosamente.
-- [ ] Prices suportam texto, imagem, melhorias e agentes sem hardcode disperso.
-- [ ] Integração com #23 correlaciona consumo técnico e débito sem duplicar eventos.
+- [x] Prices suportam texto, imagem, melhorias e agentes sem hardcode disperso.
+- [x] Integração com #23 é definida por correlação em `credit_transactions.metadata`, sem duplicar eventos.
 - [ ] Testes cobrem concorrência, saldo insuficiente, ciclo, estorno e isolamento.
-- [ ] Endpoint novo atualiza `docs/openapi.yaml` antes da implementação.
+- [x] Não há endpoint novo nesta entrega; OpenAPI permanece inalterado.
 
 ## Dependências
 

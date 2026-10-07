@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, asc, desc, func, select
@@ -457,7 +458,7 @@ class SqlAlchemyCampaignRepository(_CampaignRepositoryBase):
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[schema_models.Campaign]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.Campaign)
             .join(
@@ -610,7 +611,7 @@ class SqlAlchemyPostStructureRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[schema_models.PostStructure]:
+    def _select(self, user_id: UUID) -> Select[Any]:
         return (
             select(schema_models.PostStructure)
             .join(
