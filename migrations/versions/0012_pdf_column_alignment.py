@@ -12,6 +12,22 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    def columns(table_name: str) -> set[str]:
+        inspector.clear_cache()
+        return {column["name"] for column in inspector.get_columns(table_name)}
+
+    def add_column_if_missing(table_name: str, name: str, column_type: sa.types.TypeEngine) -> None:
+        if name not in columns(table_name):
+            op.add_column(table_name, sa.Column(name, column_type, nullable=True))
+
+    def rename_column_if_needed(table_name: str, old_name: str, new_name: str) -> None:
+        current = columns(table_name)
+        if old_name in current and new_name not in current:
+            op.alter_column(table_name, old_name, new_column_name=new_name)
+
     for name, column_type in (
         ("persona_name", sa.String(length=30)),
         ("persona_age", sa.Integer()),
@@ -23,7 +39,7 @@ def upgrade() -> None:
         ("persona_journey", sa.String(length=250)),
         ("persona_trigger", sa.String(length=200)),
     ):
-        op.add_column("planning", sa.Column(name, column_type, nullable=True))
+        add_column_if_missing("planning", name, column_type)
 
     for old_name, new_name in (
         ("info", "planning_info"),
@@ -34,7 +50,7 @@ def upgrade() -> None:
         ("start_period", "planning_start_period"),
         ("end_period", "planning_end_period"),
     ):
-        op.alter_column("planning", old_name, new_column_name=new_name)
+        rename_column_if_needed("planning", old_name, new_name)
 
     for old_name, new_name in (
         ("title", "post_title"),
@@ -47,7 +63,7 @@ def upgrade() -> None:
         ("ratio", "art_ratio"),
         ("resolution", "art_resolution"),
     ):
-        op.alter_column("post_structure", old_name, new_column_name=new_name)
+        rename_column_if_needed("post_structure", old_name, new_name)
 
     for name, column_type in (
         ("brand_segment", sa.String(length=30)),
@@ -59,9 +75,9 @@ def upgrade() -> None:
         ("brand_inspirations", sa.String(length=1500)),
         ("brand_restrictions", sa.String(length=200)),
     ):
-        op.add_column("brand_colors", sa.Column(name, column_type, nullable=True))
+        add_column_if_missing("brand_colors", name, column_type)
 
-    op.alter_column("generated_image", "status", new_column_name="image_status")
+    rename_column_if_needed("generated_image", "status", "image_status")
 
 
 def downgrade() -> None:

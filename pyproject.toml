@@ -51,7 +51,8 @@ known-first-party = ["creator"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=creator --cov-report=term-missing --cov-fail-under=80"
+addopts = "--no-header --cov=creator.domain --cov=creator.application --cov=creator.services --cov=creator.repositories --cov-report=term-missing --cov-fail-under=80 -p no:cacheprovider"
+tmp_path_retention_policy = "none"
 
 [tool.mypy]
 python_version = "3.12"

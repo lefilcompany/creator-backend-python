@@ -70,6 +70,25 @@ class _CampaignRepositoryBase:
         self._session.flush()
         return _record(row)
 
+    def update(self, *, campaign_id: UUID, fields: dict[str, object]) -> CampaignRecord:
+        row = self._session.get(schema_models.Campaign, campaign_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Campaign not found")
+        for name, value in fields.items():
+            setattr(row, name, value)
+        row.updated_at = datetime.now(UTC)
+        self._session.flush()
+        return _record(row)
+
+    def soft_delete(self, *, campaign_id: UUID) -> None:
+        row = self._session.get(schema_models.Campaign, campaign_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Campaign not found")
+        timestamp = datetime.now(UTC)
+        row.deleted_at = timestamp
+        row.updated_at = timestamp
+        self._session.flush()
+
 
 def _planning_record(row: schema_models.Planning) -> PlanningRecord:
     return PlanningRecord(
@@ -201,7 +220,32 @@ class SqlAlchemyPersonaRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[Any]:
+    def get_for_user(self, *, user_id: UUID, persona_id: UUID) -> PersonaRecord | None:
+        row = self._session.scalars(
+            self._select(user_id).where(schema_models.Persona.id == persona_id)
+        ).one_or_none()
+        return _persona_record(row) if row else None
+
+    def update(self, *, persona_id: UUID, fields: dict[str, object]) -> PersonaRecord:
+        row = self._session.get(schema_models.Persona, persona_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Persona not found")
+        for name, value in fields.items():
+            setattr(row, name, value)
+        row.updated_at = datetime.now(UTC)
+        self._session.flush()
+        return _persona_record(row)
+
+    def soft_delete(self, *, persona_id: UUID) -> None:
+        row = self._session.get(schema_models.Persona, persona_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Persona not found")
+        timestamp = datetime.now(UTC)
+        row.deleted_at = timestamp
+        row.updated_at = timestamp
+        self._session.flush()
+
+    def _select(self, user_id: UUID) -> Select[schema_models.Persona]:
         return (
             select(schema_models.Persona)
             .join(models.Brand, models.Brand.id == schema_models.Persona.brand_id)
@@ -313,7 +357,41 @@ class SqlAlchemyPlanningRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[Any]:
+    def get_for_user(self, *, user_id: UUID, planning_id: UUID) -> PlanningRecord | None:
+        row = self._session.scalars(
+            self._select(user_id).where(schema_models.Planning.id == planning_id)
+        ).one_or_none()
+        return _planning_record(row) if row else None
+
+    def update(self, *, planning_id: UUID, fields: dict[str, object]) -> PlanningRecord:
+        row = self._session.get(schema_models.Planning, planning_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Planning not found")
+        mapping = {
+            "info": "planning_info",
+            "static_amount": "planning_static_amount",
+            "carousel_amount": "planning_carousel_amount",
+            "stories_amount": "planning_stories_amount",
+            "special_dates": "planning_special_dates",
+            "start_period": "planning_start_period",
+            "end_period": "planning_end_period",
+        }
+        for name, value in fields.items():
+            setattr(row, mapping.get(name, name), value)
+        row.updated_at = datetime.now(UTC)
+        self._session.flush()
+        return _planning_record(row)
+
+    def soft_delete(self, *, planning_id: UUID) -> None:
+        row = self._session.get(schema_models.Planning, planning_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Planning not found")
+        timestamp = datetime.now(UTC)
+        row.deleted_at = timestamp
+        row.updated_at = timestamp
+        self._session.flush()
+
+    def _select(self, user_id: UUID) -> Select[schema_models.Planning]:
         return (
             select(schema_models.Planning)
             .join(
@@ -634,7 +712,26 @@ class SqlAlchemyBrandAssetRepository:
             limit=page.limit,
         )
 
-    def _select(self, user_id: UUID) -> Select[Any]:
+    def update(self, *, asset_id: UUID, fields: dict[str, object]) -> BrandAssetRecord:
+        row = self._session.get(schema_models.BrandAsset, asset_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Brand asset not found")
+        for name, value in fields.items():
+            setattr(row, name, value)
+        row.updated_at = datetime.now(UTC)
+        self._session.flush()
+        return _brand_asset_record(row)
+
+    def soft_delete(self, *, asset_id: UUID) -> None:
+        row = self._session.get(schema_models.BrandAsset, asset_id)
+        if row is None or row.deleted_at is not None:
+            raise ValueError("Brand asset not found")
+        timestamp = datetime.now(UTC)
+        row.deleted_at = timestamp
+        row.updated_at = timestamp
+        self._session.flush()
+
+    def _select(self, user_id: UUID) -> Select[schema_models.BrandAsset]:
         return (
             select(schema_models.BrandAsset)
             .join(models.Brand, models.Brand.id == schema_models.BrandAsset.brand_id)

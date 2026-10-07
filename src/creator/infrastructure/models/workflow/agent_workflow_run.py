@@ -35,6 +35,11 @@ class AgentWorkflowRun(Base):
     __tablename__ = "agent_workflow_runs"
     __table_args__ = (
         UniqueConstraint(
+            "id",
+            "workspace_id",
+            name="uq_agent_workflow_runs_id_workspace",
+        ),
+        UniqueConstraint(
             "workspace_id",
             "idempotency_key",
             name="uq_agent_workflow_runs_workspace_idempotency_key",
